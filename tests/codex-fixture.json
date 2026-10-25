@@ -1,0 +1,28 @@
+{
+  "sessions": [
+    {"id":"demo-approval","parentId":"","title":"Review Omarchy plugin packaging","project":"ohmydeparture","cwd":"/demo/ohmydeparture","agent":"","role":"","source":"vscode","model":"","status":"approval","updatedAt":1792908000},
+    {"id":"demo-child","parentId":"demo-approval","title":"Validate the read-only adapter","project":"ohmydeparture","cwd":"/demo/ohmydeparture","agent":"Validation agent","role":"reviewer","source":"subAgent","model":"","status":"running","updatedAt":1792908000},
+    {"id":"demo-input","parentId":"","title":"Improve keyboard input and resizing","project":"desktop-tools","cwd":"/demo/desktop-tools","agent":"","role":"","source":"cli","model":"","status":"input","updatedAt":1792907900},
+    {"id":"demo-idle","parentId":"","title":"Refine the split-flap layout","project":"station-display","cwd":"/demo/station-display","agent":"","role":"","source":"cli","model":"","status":"idle","updatedAt":1792907000},
+    {"id":"demo-record","parentId":"","title":"Railway board rendering history","project":"station-display","cwd":"/demo/station-display","agent":"","role":"","source":"vscode","model":"","status":"history","updatedAt":1792820000}
+  ],
+  "histories": {
+    "demo-approval": {
+      "notice":"Demo data · A completed turn does not mean the project is complete.",
+      "turns":[
+        {"id":"demo-turn-2","status":"inProgress","time":1792908000,"items":[
+          {"id":"d21","kind":"userMessage","label":"User","status":"","text":"Show session activity from the Omarchy bar."},
+          {"id":"d22","kind":"commandExecution","label":"Command","status":"completed","text":"make test\nexit: 0\nValidation passed (demo)"},
+          {"id":"d23","kind":"collabAgentToolCall","label":"Agent · Review request","status":"inProgress","text":"A validation agent is inspecting the read-only protocol. (demo)"}
+        ]},
+        {"id":"demo-turn-1","status":"completed","time":1792904000,"items":[
+          {"id":"d11","kind":"agentMessage","label":"Agent response","status":"","text":"Prepared the session list and history view. (demo)"}
+        ]}
+      ]
+    },
+    "demo-child":{"notice":"Demo data","turns":[{"id":"demo-child-turn","status":"inProgress","time":1792908000,"items":[{"id":"dc1","label":"Tool validation","kind":"commandExecution","status":"inProgress","text":"Checking allowed read-only methods and runtime mapping. (demo)"}]}]},
+    "demo-input":{"notice":"Demo data","turns":[{"id":"demo-input-turn","status":"inProgress","time":1792907900,"items":[{"id":"di1","label":"Agent response","kind":"agentMessage","status":"","text":"Choose the information to show in a narrow window. (demo)"}]}]},
+    "demo-idle":{"notice":"Demo data · IDLE does not mean complete.","turns":[{"id":"demo-idle-turn","status":"completed","time":1792907000,"items":[]}]},
+    "demo-record":{"notice":"Demo data · Stored history / current runtime unknown","turns":[{"id":"demo-record-turn","status":"interrupted","time":1792820000,"items":[]}]}
+  }
+}

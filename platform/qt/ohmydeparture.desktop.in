@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Oh My Departure
+Name[ko]=Oh My Departure
+Comment=Split-flap Codex sessions, agents and departure boards
+Comment[ko]=Codex 세션·에이전트와 공항·철도 플랩 전광판
+Exec="@EXEC@"
+Icon=ohmydeparture
+Terminal=false
+Categories=Utility;Amusement;
+StartupWMClass=OhMyDeparture

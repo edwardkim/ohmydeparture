@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "edwardkim.ohmydeparture",
+  "name": "Oh My Departure",
+  "version": "1.2.0",
+  "author": "Edward Kim",
+  "license": "MIT",
+  "description": "Read-only Codex session and agent board, plus airport and railway departure boards.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Oh My Departure",
+    "description": "Codex sessions, child agents and turn history",
+    "category": "Apps",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "windowed": true,
+      "airport": "",
+      "view": "codex"
+    },
+    "schema": [
+      {
+        "key": "view",
+        "type": "string",
+        "label": "Board: codex or departures",
+        "defaultValue": "codex"
+      },
+      {
+        "key": "windowed",
+        "type": "boolean",
+        "label": "Open in a window",
+        "defaultValue": true
+      },
+      {
+        "key": "airport",
+        "type": "string",
+        "label": "Airport/station code (empty: last selection)",
+        "defaultValue": ""
+      }
+    ]
+  },
+  "homepage": "https://github.com/edwardkim/ohmydeparture"
+}

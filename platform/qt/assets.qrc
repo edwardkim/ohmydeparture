@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="fonts/texgyreheroscn-bold.otf">../../fonts/texgyreheroscn-bold.otf</file>
+    <file alias="docs/icon.png">../../docs/icon.png</file>
+  </qresource>
+</RCC>

@@ -1,0 +1,6 @@
+# Preserve the upstream font license verbatim.
+fonts/GUST-FONT-LICENSE.txt -whitespace
+*.png binary
+*.gif binary
+*.otf binary
+*.hvif binary

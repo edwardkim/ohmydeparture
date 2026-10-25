@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+plugin_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+renderer="$plugin_dir/bin/ohmydeparture"
+
+# Rendering / CLI operations remain independent of any interactive window.
+for arg in "$@"; do
+  case "$arg" in
+    --snapshot|--snapshot=*|--help|-h|--version|-v) exec "$renderer" "$@" ;;
+  esac
+done
+
+# The binary owns the single-instance UI connection and switches the existing
+# window to the requested view. A stale widget that supplies no view opens Codex.
+explicit_view=false
+travel=false
+for arg in "$@"; do
+  case "$arg" in
+    --view|--view=*) explicit_view=true ;;
+    --airport|--airport=*) travel=true ;;
+  esac
+done
+if ! $explicit_view; then
+  if $travel; then set -- --view departures "$@"
+  else set -- --view codex "$@"; fi
+fi
+exec "$renderer" "$@"
