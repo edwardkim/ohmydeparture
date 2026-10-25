@@ -25,6 +25,13 @@ install into the user's real desktop profile. The coordinate-driven desktop test
 uses a 1920×1080 virtual screen and may need adjustment with different system fonts;
 CI runs the Qt UI checks rather than relying on those mouse coordinates.
 
+For an ICN live-API connection check, first complete the
+[per-user registration, API application and service-key setup](README.md#icn-live-data-api-prerequisites).
+Then run `python3 tools/check-icn-api.py --time-basis S` from a source checkout.
+This makes four provider requests: departures/arrivals in JSON/XML. It is an
+opt-in network check that consumes the user's quota, separate from `make test`.
+Use placeholders in `.env.example` and keep real keys in the ignored `.env`.
+
 ## Layout
 
 - `src/`: shared split-flap renderer and inherited travel boards.

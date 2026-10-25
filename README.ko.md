@@ -37,6 +37,34 @@ HISTORY는 현재 실행 상태를 모르는 저장 기록, IDLE은 현재 활�
 Codex 설정·DB·hook 변경은 하지 않습니다. 스크린샷은 개인정보를 확인한 뒤 공유하세요.
 이 문서의 화면은 가상 데이터입니다. 공항·철도 시간표도 생성된 예시입니다.
 
+## 인천공항 실데이터 API 이용 조건
+
+**실제 인천공항 운항정보를 이용하려면 사용자마다 공공데이터포털 회원가입,
+해당 API 활용신청·승인, 본인 인증키 발급을 완료해야 합니다.**
+
+1. [공공데이터포털](https://www.data.go.kr/)에 회원가입합니다.
+2. [인천국제공항공사_항공기 운항 현황 상세 조회](https://www.data.go.kr/data/15140153/openapi.do)
+   서비스 페이지를 엽니다.
+3. **활용신청**을 완료하고 승인 상태를 확인합니다. 회원가입만으로 API 사용 권한이
+   생기는 것은 아니며, 이 서비스에 대한 활용 승인이 필요합니다.
+4. 마이페이지의 API 활용신청·인증키 화면에서 본인 서비스 인증키를 확인합니다.
+5. 프로젝트 루트의 `.env`를 생성하거나 기존 파일을 수정합니다.
+   [.env.example](.env.example)의 예시를 참고하세요.
+
+```dotenv
+ICN_EP=https://apis.data.go.kr/B551177/statusOfAllFltDeOdp
+ICN_KEY=YOUR_OWN_DATA_GO_KR_SERVICE_KEY
+```
+
+프로젝트는 공용 인증키를 제공하지 않습니다. 본인 키는 로컬 `.env`에 보관하세요.
+`.env`와 `.env.*`는 Git에서 제외하며, `.env.example`에는 예시 값만 둡니다.
+계정별 호출량과 운영계정 승인 조건은 공공데이터포털에서 확인하세요.
+
+소스 작업본에서 `python3 tools/check-icn-api.py --time-basis S`를 실행하면 출발·도착을
+JSON·XML로 검사합니다. 인증키를 숨긴 검사 결과는 `test-output/`에 저장됩니다.
+**현재 v1.2.0 앱의 공항 화면은 생성 시간표를 사용합니다. 이 키 설정은 현재 API
+연결 검사에 사용되며, 실제 운항정보의 전광판 연동은 아직 적용되지 않았습니다.**
+
 원작은 [rainygirl/R Departures](https://github.com/rainygirl/renkuos-rdeparture)입니다.
 MIT 라이선스와 원작 크레딧을 유지하며, 폰트는 GUST Font License를 따릅니다.
 [출처와 변경 범위](UPSTREAM.md), [기여 안내](CONTRIBUTING.md)를 확인하세요.

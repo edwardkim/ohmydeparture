@@ -69,6 +69,14 @@ Local history is partial: latest 1 MiB, at most 30 turns and 200 items per turn.
 Session titles, paths, and tool outputs may be private: inspect your board before
 sharing screenshots. The repository demo uses synthetic data only.
 
+Access to real ICN flight data requires **each user** to register at
+[data.go.kr](https://www.data.go.kr/), apply for
+[Detailed Flight Operation Status Inquiry](https://www.data.go.kr/data/15140153/openapi.do),
+receive approval, and obtain their own service key. No shared key is included.
+See the [source setup guide](https://github.com/edwardkim/ohmydeparture#icn-live-data-api-prerequisites).
+The v1.2.0 bundle's travel boards use generated timetables; the source-level API
+checker and its `.env` setup do not yet enable live rendering in this bundle.
+
 Source and documentation: <https://github.com/edwardkim/ohmydeparture>.
 MIT source; original R Departures attribution and GUST font license are included
 in the plugin directory. This is an extracted binary bundle, not an Omarchy plugin

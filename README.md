@@ -136,6 +136,37 @@ and cycling displays. **Timetables are generated examples, not live information.
 
 ![Inherited Incheon travel board](docs/incheon.png)
 
+## ICN live-data API prerequisites
+
+**Each user must obtain their own data.go.kr account, API usage approval, and
+service key before accessing real Incheon Airport flight data.**
+
+1. Register an account at the [Korean Public Data Portal](https://www.data.go.kr/).
+2. Open [Incheon International Airport Corporation — Detailed Flight Operation
+   Status Inquiry](https://www.data.go.kr/data/15140153/openapi.do)
+   (`인천국제공항공사_항공기 운항 현황 상세 조회`).
+3. Select **활용신청** (Apply for Use) and complete the application for this
+   specific API. Wait until the application is approved.
+4. Obtain your own service key from the portal's account/API application pages.
+   A portal account alone does not grant access to this API.
+5. Create or update `.env` in the project root using [.env.example](.env.example):
+
+```dotenv
+ICN_EP=https://apis.data.go.kr/B551177/statusOfAllFltDeOdp
+ICN_KEY=YOUR_OWN_DATA_GO_KR_SERVICE_KEY
+```
+
+The project does not provide a shared key. Keep your key in your local `.env`;
+`.env` and `.env.*` are ignored by Git, with `.env.example` reserved for placeholders.
+Check the portal for your account's current quota and any production-use approval
+requirements.
+
+From a source checkout, run `python3 tools/check-icn-api.py --time-basis S` to
+check departures and arrivals in both JSON and XML. The checker reads `.env`
+without executing it and writes a credential-redacted summary under `test-output/`.
+**The v1.2.0 app's travel boards still show generated timetables; configuring
+this key currently enables the API connection check, not live board rendering.**
+
 ## Development
 
 ```sh
