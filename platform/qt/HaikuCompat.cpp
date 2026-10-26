@@ -319,8 +319,11 @@ void BPopUpMenu::AddItem(BMenuItem* item)
 {
     items_.emplace_back(item);
     item->action_ = menu_.addAction(item->text_);
-    item->action_->setCheckable(true);
-    item->action_->setChecked(item->marked_);
+    item->action_->setCheckable(item->checkable_);
+    if (item->checkable_) {
+        selections_.addAction(item->action_);
+        item->action_->setChecked(item->marked_);
+    }
 }
 
 BMenuItem* BPopUpMenu::Go(BPoint at, bool, bool)

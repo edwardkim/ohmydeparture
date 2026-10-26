@@ -7,7 +7,9 @@
 
 #ifdef RDEPARTURES_QT
 #include "HaikuCompat.h"
+#include "IcnDepartures.h"
 #include <QJsonArray>
+#include <QJsonObject>
 #include <functional>
 #else
 #include <Font.h>
@@ -105,6 +107,10 @@ public:
 			bool			Animating() const;
 #ifdef RDEPARTURES_QT
     void SetCodexRows(const QJsonArray& rows, const QString& notice);
+    void SetCodexHistory(const QJsonArray& rows, const QJsonObject& session, const QString& notice);
+    void SetBackHandler(std::function<void()> handler) { fBackHandler = std::move(handler); }
+    void SetBrowserHandler(std::function<void()> handler) { fBrowserHandler = std::move(handler); }
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
     void SetCodexHandler(std::function<void()> handler) { fCodexHandler = std::move(handler); }
     void SetAirportHandler(std::function<void(int)> handler) { fAirportHandler = std::move(handler); }
     void SetRowHandler(std::function<void(int)> handler) { fRowHandler = std::move(handler); }
@@ -119,21 +125,29 @@ public:
 private:
 #ifdef RDEPARTURES_QT
     void _UpdateCodex();
+    void _UpdateCodexHistory();
+    void _UpdateIcn(bool phaseChanged);
+    void _SetFlightAirline(int field, const QString& code, const QString& name, bigtime_t delay);
     void _FlipCodexRows(bigtime_t now);
     BBitmap* _ProjectFace(const QString& project, const QString& path);
     void _SetProject(int field, const QString& project, const QString& path, bigtime_t delay);
     bool fCodexMode = false;
+    bool fCodexHistoryMode = false;
+    bool fIcnLoaded = false;
+    IcnDepartures fIcnDepartures;
     int fCodexPage = 0;
     int fCodexFlipInterval = 3;
     int fCodexFlipDurationMs = 650;
     bigtime_t fLastCodexFlip = 0;
     bigtime_t fCodexSweepEnd = 0;
     QJsonArray fCodexRows;
+    QJsonObject fHistorySession;
     QString fCodexNotice;
     std::function<void()> fCodexHandler;
     std::function<void(int)> fAirportHandler;
     std::function<void(int)> fRowHandler;
     std::function<void()> fSettingsHandler;
+    std::function<void()> fBackHandler, fBrowserHandler;
 #endif
 			void			_PickFonts();
 			void			_FreeLayout();

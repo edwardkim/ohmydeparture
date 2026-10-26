@@ -1,5 +1,6 @@
 #include "CodexBoard.h"
 #include "Board.h"
+#include "CodexHistory.h"
 #include <QDialog>
 #include <QApplication>
 #include <QBoxLayout>
@@ -33,6 +34,7 @@
 #include <QTimer>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <QStackedLayout>
 #include <algorithm>
 #include <cmath>
 
@@ -120,13 +122,23 @@ CodexBoard::CodexBoard(const QString& fixture,QWidget* parent):QWidget(parent),f
     mainLayout->setContentsMargins(0,0,0,0);
     flap_ = new BoardView(BRect(0,0,1599,899),0);
     flap_->setObjectName("codexFlapBoard");
-    flap_->setParent(this);
-    mainLayout->addWidget(flap_);
+    historyFlap_=new BoardView(BRect(0,0,1599,899),0);
+    historyFlap_->setObjectName("codexHistoryBoard");
+    historyFlap_->SetCodexHistory({}, {}, "PARTIAL HISTORY");
+    pages_=new QStackedLayout;
+    mainLayout->addLayout(pages_);pages_->addWidget(flap_);pages_->addWidget(historyFlap_);
+    pages_->setCurrentWidget(flap_);
     flap_->SetCodexRows({},"Connecting · read only");
-    flap_->SetRowHandler([this](int row){openDetails(row);});
-    flap_->SetCodexHandler([this]{openDetails();});
+    flap_->SetRowHandler([this](int row){openSessionHistory(row);});
+    flap_->SetCodexHandler([this]{showSessionBoard();});
+    flap_->SetBrowserHandler([this]{openDetails();});
     flap_->SetSettingsHandler([this]{openSettings();});
     flap_->SetAirportHandler([this](int index){details_->hide();if (departuresHandler_) departuresHandler_(index);});
+    historyFlap_->SetBackHandler([this]{showSessionBoard();});
+    historyFlap_->SetCodexHandler([this]{showSessionBoard();});
+    historyFlap_->SetBrowserHandler([this]{openDetails();});
+    historyFlap_->SetSettingsHandler([this]{openSettings();});
+    historyFlap_->SetAirportHandler([this](int index){details_->hide();if (departuresHandler_) departuresHandler_(index);});
     // An independent window avoids Wayland's parent-centred dialog placement.
     // We own and delete it explicitly; geometry uses the monitor work area.
     details_ = new QDialog;
@@ -202,6 +214,9 @@ CodexBoard::CodexBoard(const QString& fixture,QWidget* parent):QWidget(parent),f
     connect(list_,&QTreeWidget::itemExpanded,this,[this]{syncBoard();});
     connect(list_,&QTreeWidget::itemCollapsed,this,[this]{syncBoard();});
     connect(list_,&QTreeWidget::itemSelectionChanged,this,[this]{selected();});
+    connect(list_,&QTreeWidget::itemDoubleClicked,this,[this](QTreeWidgetItem* item,int){
+        const int row=visibleIds_.indexOf(item->data(0,IdRole).toString());if (row>=0) openSessionHistory(row);
+    });
     connect(history_,&QTreeWidget::itemSelectionChanged,this,[this]{
         if (auto* item=history_->currentItem()) { const auto body=item->data(0,BodyRole).toString();if (content_->toPlainText()!=body) content_->setPlainText(body); }
     });
@@ -213,7 +228,7 @@ CodexBoard::CodexBoard(const QString& fixture,QWidget* parent):QWidget(parent),f
     deadline_=new QTimer(this);deadline_->setSingleShot(true);deadline_->setInterval(14000);
     connect(deadline_,&QTimer::timeout,this,[this]{reader_->kill();disconnected("Response timed out · retrying on the next refresh.");});
     poll_=new QTimer(this);poll_->setInterval(5000);connect(poll_,&QTimer::timeout,this,[this]{refresh(false);});
-    auto* escape=new QShortcut(QKeySequence(Qt::Key_Escape),this);connect(escape,&QShortcut::activated,this,&QWidget::close);
+    auto* escape=new QShortcut(QKeySequence(Qt::Key_Escape),this);connect(escape,&QShortcut::activated,this,[this]{if (historyVisible()) showSessionBoard();else close();});
     auto* fullscreen=new QShortcut(QKeySequence(Qt::Key_F11),this);connect(fullscreen,&QShortcut::activated,this,[this]{isFullScreen()?showNormal():showFullScreen();});
     auto* ticker=new QTimer(this);ticker->setInterval(80);connect(ticker,&QTimer::timeout,this,[this]{clock_->setText(QDateTime::currentDateTime().toString("HH:mm:ss"));list_->viewport()->update();});ticker->start();
     settings_=new QDialog;
@@ -239,12 +254,16 @@ CodexBoard::CodexBoard(const QString& fixture,QWidget* parent):QWidget(parent),f
     connect(closeSettings,&QDialogButtonBox::rejected,settings_,&QDialog::reject);preferencesLayout->addWidget(closeSettings);
     flap_->SetCodexFlipInterval(flipInterval_->value());
     flap_->SetCodexFlipDurationMs(qRound(flipDuration_->value()*1000));
+    historyFlap_->SetCodexFlipInterval(flipInterval_->value());
+    historyFlap_->SetCodexFlipDurationMs(qRound(flipDuration_->value()*1000));
     connect(flipInterval_,&QSpinBox::valueChanged,this,[this](int seconds){
         flap_->SetCodexFlipInterval(seconds);
+        historyFlap_->SetCodexFlipInterval(seconds);
         QSettings settings;settings.setValue("codex/flipIntervalSeconds",seconds);settings.sync();
     });
     connect(flipDuration_,&QDoubleSpinBox::valueChanged,this,[this](double seconds){
         const int milliseconds=qRound(seconds*1000);flap_->SetCodexFlipDurationMs(milliseconds);
+        historyFlap_->SetCodexFlipDurationMs(milliseconds);
         QSettings settings;settings.setValue("codex/flipDurationMs",milliseconds);settings.sync();
     });
     if (!fixture_.isEmpty()) {archives_->setEnabled(false);QString error; if (!loadFixture(fixture_,&error)) connection_->setText(error);}
@@ -387,8 +406,8 @@ void CodexBoard::buildSessions() {
 
 void CodexBoard::selected() {
     auto* item=list_->currentItem();if (!item) return;const auto id=item->data(0,IdRole).toString();if (id==selectedId_) return;
-    selectedId_=id;turns_={};historyCursor_.clear();olderHistory_=false;buildHistory();content_->clear();
-    selection_->setText(item->text(0));selection_->setToolTip(item->toolTip(0));historyNote_->setText("Loading history…");loadHistory();
+    selectedId_=id;turns_={};historyCursor_.clear();olderHistory_=false;historyNote_->setText("Loading history…");buildHistory();content_->clear();
+    selection_->setText(item->text(0));selection_->setToolTip(item->toolTip(0));loadHistory();syncHistoryBoard();
 }
 
 void CodexBoard::loadHistory(bool append) {
@@ -423,7 +442,7 @@ void CodexBoard::buildHistory() {
         top->setExpanded(expanded.contains(id)||(expanded.isEmpty()&&history_->topLevelItemCount()==1));if (id==selected) restore=top;
     }
     if (restore) {history_->setCurrentItem(restore);const auto text=restore->data(0,BodyRole).toString();if (content_->toPlainText()!=text) content_->setPlainText(text);}
-    history_->verticalScrollBar()->setValue(scroll);moreHistory_->setVisible(!historyCursor_.isEmpty());
+    history_->verticalScrollBar()->setValue(scroll);moreHistory_->setVisible(!historyCursor_.isEmpty());syncHistoryBoard();
 }
 
 void CodexBoard::disconnected(const QString& reason) {
@@ -434,7 +453,7 @@ void CodexBoard::disconnected(const QString& reason) {
 }
 void CodexBoard::keyPressEvent(QKeyEvent* event) {
     if (event->key()==Qt::Key_F11) {isFullScreen()?showNormal():showFullScreen();event->accept();return;}
-    if (event->key()==Qt::Key_Escape) {close();event->accept();return;}
+    if (event->key()==Qt::Key_Escape) {if (historyVisible()) showSessionBoard();else close();event->accept();return;}
     QWidget::keyPressEvent(event);
 }
 void CodexBoard::resizeEvent(QResizeEvent* event) {
@@ -455,7 +474,45 @@ void CodexBoard::syncBoard() {
     for (int i=0;i<list_->topLevelItemCount();++i) append(list_->topLevelItem(i),0);
     QString notice=source_=="demo"?"DEMO DATA":source_=="appServer"?"Codex connected · read only":"Local history · runtime unknown";
     if (connection_->text().startsWith("Disconnected")) notice="Disconnected · previous state unknown";
-    flap_->SetCodexRows(visible,notice+" | CLICK A ROW: DETAILS / AGENTS | ← → PAGE");
+    flap_->SetCodexRows(visible,notice+" | DOUBLE-CLICK: HISTORY | ← → PAGE");
+    syncHistoryBoard();
+}
+
+bool CodexBoard::historyVisible() const { return pages_->currentWidget()==historyFlap_; }
+
+void CodexBoard::openSessionHistory(int row) {
+    if (row<0 || row>=visibleIds_.size()) return;
+    const auto id=visibleIds_[row];
+    historySessionId_=id;historySession_={};
+    for (const auto& value:sessions_) if (value.toObject()["id"].toString()==id) {historySession_=value.toObject();break;}
+    const bool same=selectedId_==id;
+    historyFlap_->SetCodexHistory({QJsonObject{{"event","HISTORY"},{"text","Loading recent history..."},{"result","LOADING"}}},historySession_,"PARTIAL HISTORY");
+    for (QTreeWidgetItemIterator it(list_);*it;++it) if ((*it)->data(0,IdRole).toString()==id) {list_->setCurrentItem(*it);break;}
+    if (same && !historyBusy_) loadHistory();
+    details_->hide();syncHistoryBoard();pages_->setCurrentWidget(historyFlap_);
+    setWindowTitle("Oh My Departure — Session history");historyFlap_->setFocus();
+}
+
+void CodexBoard::showSessionBoard() {
+    pages_->setCurrentWidget(flap_);historySessionId_.clear();historySession_={};
+    setWindowTitle("Oh My Departure — Codex");flap_->setFocus();
+}
+
+void CodexBoard::syncHistoryBoard() {
+    if (historySessionId_.isEmpty()) return;
+    QJsonArray rows;
+    if (selectedId_==historySessionId_) rows=codexHistoryRows(turns_);
+    if (rows.isEmpty()) {
+        const bool loading=selectedId_==historySessionId_ && (historyBusy_||historyNote_->text().startsWith("Loading"));
+        const bool unavailable=selectedId_!=historySessionId_ || historyNote_->text().startsWith("Cannot read history:")
+            || connection_->text().startsWith("Disconnected");
+        const auto text=selectedId_!=historySessionId_?QString("Selected session is not available")
+            :unavailable?QString("History is currently unavailable")
+            :loading?QString("Loading recent history..."):QString("No recorded history in this preview");
+        rows.append(QJsonObject{{"event","HISTORY"},{"text",text},{"result",unavailable?"UNAVAILABLE":loading?"LOADING":"EMPTY"}});
+    }
+    const QString source=connection_->text().startsWith("Disconnected")?"OFFLINE / ":source_=="demo"?"DEMO / ":source_=="appServer"?"CODEX / ":"LOCAL / ";
+    historyFlap_->SetCodexHistory(rows,historySession_,source+"PARTIAL HISTORY");
 }
 
 void CodexBoard::openDetails(int row) {

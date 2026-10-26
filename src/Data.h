@@ -1,9 +1,10 @@
 /*
  * Airports, airlines, cities and the timetable R Departures shows.
  *
- * The flights are generated, not fetched: each airport has a list of real
+ * These legacy flights are generated: each airport has a list of real
  * routes, and every day gets the same timetable for them, with a few delays
  * and cancellations decided by a hash of the date.
+ * The Linux ICN board uses a separate provider snapshot in IcnDepartures.
  */
 #ifndef DATA_H
 #define DATA_H

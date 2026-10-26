@@ -2,5 +2,8 @@
   <qresource prefix="/">
     <file alias="fonts/texgyreheroscn-bold.otf">../../fonts/texgyreheroscn-bold.otf</file>
     <file alias="docs/icon.png">../../docs/icon.png</file>
+    <file alias="data/airport-codes.json">../../data/airport-codes.json</file>
+    <file alias="data/airport-details.json">../../data/airport-details.json</file>
+    <file alias="data/icn-departures.json">../../data/icn-departures.json</file>
   </qresource>
 </RCC>

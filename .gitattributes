@@ -4,3 +4,5 @@ fonts/GUST-FONT-LICENSE.txt -whitespace
 *.gif binary
 *.otf binary
 *.hvif binary
+# Preserve the original CSV encoding and bytes for reproducible imports.
+data/sources/*.csv binary

@@ -2,7 +2,7 @@
 """Check the configured ICN API in JSON and XML without logging credentials.
 
 Reads ICN_EP and ICN_KEY from .env as plain data; never executes the file.
-Results contain response metadata and schema fields, not raw payloads or keys.
+Results include returned flight records and response metadata; keys are redacted.
 """
 import argparse
 from datetime import datetime
@@ -72,17 +72,19 @@ def describe_payload(payload):
         if gateway is not None:
             return dict(format='xml', result_code=gateway.findtext('returnReasonCode'),
                         result_message=gateway.findtext('returnAuthMsg') or gateway.findtext('errMsg'),
-                        total_count=None, returned_items=0, item_fields=[])
+                        total_count=None, returned_items=0, item_fields=[], items=[])
         body = root.find('body')
         if body is None:
             body = root.find('.//body')
-        items = [] if body is None else body.findall('./items/item')
+        xml_items = [] if body is None else body.findall('./items/item')
+        items = [{element.tag: element.text for element in item} for item in xml_items]
         return dict(format='xml', result_code=root.findtext('.//header/resultCode'),
                     result_message=root.findtext('.//header/resultMsg'),
                     total_count=None if body is None else body.findtext('totalCount'),
                     page_no=None if body is None else body.findtext('pageNo'),
                     page_size=None if body is None else body.findtext('numOfRows'),
-                    returned_items=len(items), item_fields=sorted({e.tag for item in items for e in item}))
+                    returned_items=len(items), item_fields=sorted({key for item in items for key in item}),
+                    items=items)
     value = json.loads(text)
     if not isinstance(value, dict):
         raise ValueError('Expected a JSON response object')
@@ -97,7 +99,7 @@ def describe_payload(payload):
     return dict(format='json', result_code=header.get('resultCode'), result_message=header.get('resultMsg'),
                 total_count=body.get('totalCount'), returned_items=len(items),
                 page_no=body.get('pageNo'), page_size=body.get('numOfRows'),
-                item_fields=sorted({key for item in items for key in item}))
+                item_fields=sorted({key for item in items for key in item}), items=items)
 
 
 class NoRedirects(HTTPRedirectHandler):

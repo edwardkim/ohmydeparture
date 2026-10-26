@@ -1,7 +1,8 @@
 # Oh My Departure — Omarchy bundle
 
 An English-first, read-only Codex session and agent board using a split-flap display.
-Airport and railway boards are also available. Timetables are generated examples.
+Airport and railway boards are also available. ICN uses a dated provider snapshot;
+other travel timetables are generated examples.
 
 ## Install
 
@@ -34,10 +35,13 @@ available. Installation errors restore files from the backup.
 
 ## Use
 
-Click the bar icon to open or focus the board. Click a row for session details,
-search, child agents, turns, and tool history. The gear menu contains
-**Codex sessions & agents**, **Session details & search…**, **Display settings…**,
-and travel destinations. **F11** toggles fullscreen; **Esc** closes the window.
+Click the bar icon to open or focus the board. Double-click a session or child
+agent row for its split-flap recent history in the same window. **← BACK** or
+the keyboard **Left arrow** returns to the board; **Right arrow / Space** pages
+through history. **Esc** returns from history and closes the main session board.
+The gear menu contains **Codex sessions & agents**, **Session browser & search…**,
+**Display settings…**, and travel destinations. The browser offers search,
+archived sessions, older turns and full recorded item text. **F11** toggles fullscreen.
 
 **Display settings…** controls the repeat interval (default 3 seconds; 0 disables
 replay) and flip duration (default 0.65 seconds; range 0.20–2.00). Project plaques
@@ -69,13 +73,23 @@ Local history is partial: latest 1 MiB, at most 30 turns and 200 items per turn.
 Session titles, paths, and tool outputs may be private: inspect your board before
 sharing screenshots. The repository demo uses synthetic data only.
 
-Access to real ICN flight data requires **each user** to register at
+ICN displays the bundled departure snapshot with its fetch time in KST. Operating
+passenger flights appear once; codeshare duplicates are excluded from the board.
+The snapshot does not refresh automatically. An old day displays `REFRESH REQUIRED`
+with empty rows. During its day, the visible window follows the system clock:
+changed time (or scheduled time if absent) at or after 30 minutes ago, including
+all later flights that fit the board. This filters existing data without API calls.
+Other airport and railway boards use generated timetables.
+
+Downloading or refreshing ICN flight data requires **each user** to register at
 [data.go.kr](https://www.data.go.kr/), apply for
 [Detailed Flight Operation Status Inquiry](https://www.data.go.kr/data/15140153/openapi.do),
 receive approval, and obtain their own service key. No shared key is included.
 See the [source setup guide](https://github.com/edwardkim/ohmydeparture#icn-live-data-api-prerequisites).
-The v1.2.0 bundle's travel boards use generated timetables; the source-level API
-checker and its `.env` setup do not yet enable live rendering in this bundle.
+Viewing the bundled snapshot requires no key. From a source checkout, run
+`python3 tools/fetch-icn-departures.py`, rebuild with `make package-omarchy`, and
+run the new installer to update the embedded data. Restart an already running app
+after updating. The bundle excludes `.env` and all service keys.
 
 Source and documentation: <https://github.com/edwardkim/ohmydeparture>.
 MIT source; original R Departures attribution and GUST font license are included

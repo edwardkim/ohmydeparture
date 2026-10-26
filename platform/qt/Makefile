@@ -12,7 +12,7 @@ CPPFLAGS += -DOHMYDEPARTURE_VERSION=\"$(VERSION)\"
 PREFIX ?= $(HOME)/.local
 BUILD ?= .build/linux
 
-SOURCES := platform/qt/LinuxApp.cpp platform/qt/Branding.cpp platform/qt/HaikuCompat.cpp platform/qt/CodexBoard.cpp platform/qt/DesktopBoards.cpp src/Board.cpp src/Data.cpp src/Station.cpp
+SOURCES := platform/qt/LinuxApp.cpp platform/qt/Branding.cpp platform/qt/HaikuCompat.cpp platform/qt/CodexBoard.cpp platform/qt/CodexHistory.cpp platform/qt/DesktopBoards.cpp platform/qt/IcnDepartures.cpp src/Board.cpp src/Data.cpp src/Station.cpp
 OBJECTS := $(SOURCES:%.cpp=$(BUILD)/%.o) $(BUILD)/qrc_assets.o
 
 all: $(APP) RDepartures
@@ -31,7 +31,7 @@ $(BUILD)/%.o: %.cpp | check-deps
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-$(BUILD)/qrc_assets.cpp: platform/qt/assets.qrc fonts/texgyreheroscn-bold.otf docs/icon.png | check-deps
+$(BUILD)/qrc_assets.cpp: platform/qt/assets.qrc fonts/texgyreheroscn-bold.otf docs/icon.png data/airport-codes.json data/airport-details.json data/icn-departures.json | check-deps
 	@mkdir -p $(dir $@)
 	$(RCC) $< -o $@
 
@@ -72,14 +72,34 @@ $(BUILD)/codex-smoke.o: tests/codex-smoke.cpp
 $(BUILD)/codex-smoke: $(BUILD)/codex-smoke.o $(BUILD)/LinuxAppTest.o $(filter-out $(BUILD)/platform/qt/LinuxApp.o,$(OBJECTS))
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS) $(shell pkg-config --libs Qt6Test)
 
+$(BUILD)/codex-history-test.o: tests/codex-history.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD)/codex-history-test: $(BUILD)/codex-history-test.o $(BUILD)/platform/qt/CodexHistory.o
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD)/icn-departures-test.o: tests/icn-departures.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD)/icn-departures-test: $(BUILD)/icn-departures-test.o $(BUILD)/platform/qt/IcnDepartures.o $(BUILD)/qrc_assets.o
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test-icn: $(BUILD)/icn-departures-test
+	python3 tests/icn-download.py
+	$(BUILD)/icn-departures-test
+
 $(BUILD)/../libexec/codex-reader.py: platform/codex/reader.py
 	install -Dm644 $< $@
 
-test-codex: $(APP) $(BUILD)/codex-smoke $(BUILD)/../libexec/codex-reader.py
+test-codex: $(APP) $(BUILD)/codex-smoke $(BUILD)/codex-history-test $(BUILD)/../libexec/codex-reader.py
+	$(BUILD)/codex-history-test
 	python3 tests/codex-reader.py
 	env QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_IM_MODULE= $(BUILD)/codex-smoke
 
-test: $(APP) $(BUILD)/linux-smoke test-codex
+test: $(APP) $(BUILD)/linux-smoke test-codex test-icn
+	python3 tests/airport-data.py
 	env QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_IM_MODULE= $(BUILD)/linux-smoke
 	python3 tests/linux-cli.py
 
@@ -94,4 +114,6 @@ test-desktop: $(APP)
 
 -include $(OBJECTS:.o=.d)
 -include $(BUILD)/linux-smoke.d $(BUILD)/LinuxAppTest.d $(BUILD)/codex-smoke.d
-.PHONY: all check-deps install clean test test-codex test-desktop package-omarchy test-omarchy
+-include $(BUILD)/icn-departures-test.d
+-include $(BUILD)/codex-history-test.d
+.PHONY: all check-deps install clean test test-codex test-icn test-desktop package-omarchy test-omarchy

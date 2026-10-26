@@ -52,20 +52,23 @@ with tempfile.TemporaryDirectory(prefix='rdepartures-views-') as tmp:
             run([APP,'--view','codex','--windowed'],env)
             codex=find('^Oh My Departure — Codex$',env,process)
             assert run(['xdotool','getwindowpid',codex],env)==str(process.pid),'new process stole requested view'
-            # Genuine native renderer row activation opens supplementary history.
+            # A single click stays on the board; double click opens inline flap history.
             time.sleep(4.2)
             run(['magick','import','-window',codex,OUT/'codex-native.png'],env)
             run(['xdotool','windowfocus','--sync',codex],env)
-            run(['xdotool','windowmove',codex,'1000','0'],env)
             run(['xdotool','mousemove','--window',codex,'330','110','click','1'],env)
-            details=find('^Codex session details$',env,process)
-            geometry=dict(line.split('=',1) for line in run(['xdotool','getwindowgeometry','--shell',details],env).splitlines())
-            dx,dy,dw,dh=(int(geometry[k]) for k in ('X','Y','WIDTH','HEIGHT'))
-            assert 0<=dx and dx+dw<=1920 and 0<=dy and dy+dh<=1080,geometry
-            assert abs(dx+dw/2-960)<=2,geometry
-            run(['magick','import','-window','root',OUT/'codex-centred-details.png'],env)
-            run(['xdotool','windowfocus','--sync',details],env);run(['xdotool','key','Escape'],env)
-            run(['xdotool','windowmove',codex,'0','0'],env)
+            assert find('^Oh My Departure — Codex$',env,process)==codex
+            run(['xdotool','mousemove','--window',codex,'330','110','click','--repeat','2','--delay','100','1'],env)
+            details=find('^Oh My Departure — Session history$',env,process)
+            assert details==codex,'history must use the same native window'
+            time.sleep(3.4)
+            run(['magick','import','-window',details,OUT/'codex-history-native.png'],env)
+            run(['xdotool','key','Left'],env)
+            assert find('^Oh My Departure — Codex$',env,process)==codex
+            run(['xdotool','mousemove','--window',codex,'330','110','click','--repeat','2','--delay','100','1'],env)
+            details=find('^Oh My Departure — Session history$',env,process)
+            run(['xdotool','mousemove','--window',details,'80','30','click','1'],env)
+            assert find('^Oh My Departure — Codex$',env,process)==codex
             run([APP,'--airport','SEOUL','--windowed'],env)
             departures=find('^Oh My Departure$',env,process)
             # Existing airport popup now really includes Codex (one above Quit).
@@ -91,4 +94,4 @@ with tempfile.TemporaryDirectory(prefix='rdepartures-views-') as tmp:
             assert process.wait(timeout=5)==0
         finally:
             if process.poll() is None:process.kill();process.wait(timeout=3)
-print('PASS: native airport ↔ Codex menus, row details, same-process view requests, persisted selection, crash recovery, Escape')
+print('PASS: native airport ↔ Codex menus, double-click flap history, both back controls, same-window navigation, persisted selection, crash recovery, Escape')

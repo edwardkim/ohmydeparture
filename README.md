@@ -86,20 +86,30 @@ not directly installable with `omarchy plugin add`; use the extracted bundle.
 | Action | Control |
 | --- | --- |
 | Open/focus the board | Click the Omarchy bar icon |
-| Inspect session, child agents and history | Click a session row |
+| Open a session or child agent's flap history | Double-click its row |
+| Return from history to the session board | **← BACK** flap or **Left arrow** (Esc also returns) |
+| Page through the recent history | **Right arrow / Space** |
 | Change view or travel destination | Gear menu |
-| Open search and history | Gear → **Session details & search…** |
+| Open the searchable session browser and full recorded item text | Gear → **Session browser & search…** |
 | Set flip interval and duration | Gear → **Display settings…** |
 | Fullscreen / window | **F11** |
-| Close details or main window | **Esc** |
+| Close browser/settings or the main session board | **Esc** |
 | Change travel board / Codex page | **← / →** (travel also supports Space) |
 
 The repeat interval accepts **0–3600 seconds** (0 disables replay), and flip
 duration accepts **0.20–2.00 seconds**. Both settings save automatically. A sweep
-finishes before another starts. Details and settings centre on the monitor's
+finishes before another starts. Both flap screens share these settings. The
+session history opens in the same window and returns to the existing session
+board, preserving its filters and expanded agents. The history is a bounded
+preview of up to 20 recent items across 10 turns, with at most three flap lines
+per item. The turn time, event type, content preview and recorded outcome are
+shown; a completed turn does not mark a project complete. The browser retains
+search, archive filters, older turns and full recorded item text.
+
+The browser and settings centre on the monitor's
 available area; Hyprland placement targets only this app's own dialog windows.
 
-![Synthetic session details](docs/codex-details.png)
+![Synthetic split-flap session history](docs/codex-history.png)
 
 ## What the statuses mean
 
@@ -132,14 +142,30 @@ before sharing. The public demo never reads personal histories.
 
 Available codes: `ICN`, `NRT`, `HKG`, `LHR`, `CDG`, `MXP`, `JFK`, `SFO`, `TOKYO`,
 `SEOUL`, `VICTORIA`, `SYDNEY`. They retain the original airport/station languages
-and cycling displays. **Timetables are generated examples, not live information.**
+and cycling displays. **ICN uses a downloaded daily departure snapshot; the other
+airport and railway timetables are generated examples.**
 
-![Inherited Incheon travel board](docs/incheon.png)
+The ICN board starts in English and cycles through Korean and an English fallback
+for the destination-language phase. It displays operating passenger flights from
+the provider's `Master` records, with their scheduled/changed times, destination,
+airline, flight number, gate and recorded status. Shared `Slave` records remain
+in the downloaded file but do not create duplicate departure rows. The footer
+shows the snapshot's actual fetch time in KST; it is not an automatic live feed.
+Rows are filtered against the system clock: display only flights at or after
+**current time minus 30 minutes**, with no upper time limit within the snapshot day.
+The changed time is used when available, otherwise the scheduled time. Delayed
+flights follow the same cutoff. The display window advances as the system clock
+changes, using the downloaded data without another API request. When the snapshot day
+has passed, ICN shows `REFRESH REQUIRED` and empty rows until the data is updated.
+Missing or invalid ICN data never falls back to generated flights.
+
+![ICN provider snapshot with fetch time shown in the footer](docs/icn-provider-snapshot.png)
 
 ## ICN live-data API prerequisites
 
-**Each user must obtain their own data.go.kr account, API usage approval, and
-service key before accessing real Incheon Airport flight data.**
+**Each user who downloads or refreshes ICN data must obtain their own data.go.kr
+account, API usage approval, and service key. Viewing the bundled snapshot does
+not require a key.**
 
 1. Register an account at the [Korean Public Data Portal](https://www.data.go.kr/).
 2. Open [Incheon International Airport Corporation — Detailed Flight Operation
@@ -163,9 +189,56 @@ requirements.
 
 From a source checkout, run `python3 tools/check-icn-api.py --time-basis S` to
 check departures and arrivals in both JSON and XML. The checker reads `.env`
-without executing it and writes a credential-redacted summary under `test-output/`.
-**The v1.2.0 app's travel boards still show generated timetables; configuring
-this key currently enables the API connection check, not live board rendering.**
+without executing it and writes a credential-redacted report under `test-output/`.
+Each `checks[].items` array contains the returned flight records, alongside
+response metadata and counts. XML item fields are represented as JSON objects.
+
+To replace the ICN board's snapshot with today's full departure data (Asia/Seoul):
+
+```sh
+python3 tools/fetch-icn-departures.py
+make -j2
+./ohmydeparture --airport ICN --windowed
+```
+
+The downloader paginates the scheduled day (`searchdtCode=S`, `0000`–`2400`),
+validates the complete result, and atomically replaces `data/icn-departures.json`.
+Failures preserve the existing file and credentials are omitted. Builds embed
+the snapshot without network access. Restart the application after rebuilding;
+an already running instance keeps its existing data. For an installed Omarchy
+bundle, rebuild with `make package-omarchy` and run the new bundle's installer.
+See [data/README.md](data/README.md#icn-daily-departures) for the snapshot format.
+
+## Static airport code reference
+
+[data/airport-codes.json](data/airport-codes.json) contains all **1,391 airport
+and city codes** retrieved on **2026-10-26** from [Korea Airports Corporation —
+Airport Code Information_GW](https://www.data.go.kr/data/15158948/openapi.do).
+The snapshot is bundled in the executable at `:/data/airport-codes.json`.
+**Using this reference requires no network connection or airport-code API key.**
+It is updated manually, without an automatic download during builds or use.
+
+Join ICN flight `airportCode` to reference `cityCode`, using `cityEnglish` for
+the default English board or `cityKorean` for Korean. All 137 distinct airport
+codes in the 2,244 ICN departure/arrival records checked for 2026-10-26 matched.
+Provider fields `cityJapan` and `cityChina` can contain English text.
+The ICN snapshot board uses these names; other travel boards retain their generated data.
+
+[data/airport-details.json](data/airport-details.json) additionally contains
+**5,498 airport records** from the supplied `IATA_20251231.csv`, provided by
+**Ministry of Land, Infrastructure and Transport, Republic of Korea**, including full
+English/Korean names and ICAO codes. It is bundled at `:/data/airport-details.json`.
+The original CP949 CSV is preserved under `data/sources/`. There are 5,305 distinct
+valid IATA codes; 19 codes have multiple airport records. Missing/malformed codes
+and duplicate candidates are recorded explicitly rather than silently replaced.
+The city reference and this airport catalog remain separate for accurate labels
+and airport details.
+
+See [data/README.md](data/README.md) for the format, source terms and manual
+update procedure. Only maintainers who refresh the snapshot need their own
+API approval and the optional `ACODE_EP` / `ACODE_KEY` settings in
+[.env.example](.env.example). ICN live-flight API access has its own requirements
+described above.
 
 ## Development
 
