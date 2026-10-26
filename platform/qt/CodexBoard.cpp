@@ -2,6 +2,7 @@
 #include "Board.h"
 #include <QDialog>
 #include <QApplication>
+#include <QBoxLayout>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
@@ -155,10 +156,12 @@ CodexBoard::CodexBoard(const QString& fixture,QWidget* parent):QWidget(parent),f
         QToolTip { background:#283120; color:#f3eddd; border:1px solid #6b7756; }
     )");
     auto* layout=new QVBoxLayout(details_);layout->setContentsMargins(28,22,28,18);layout->setSpacing(13);
-    auto* top=new QHBoxLayout;
+    detailsHeader_=new QBoxLayout(QBoxLayout::LeftToRight);
     auto* headings=new QVBoxLayout;auto* eyebrow=new QLabel("OH MY DEPARTURE   /   SESSION DETAILS");eyebrow->setObjectName("eyebrow");
     headings->addWidget(eyebrow);auto* heading=new QLabel("CODEX / DETAILS");heading->setObjectName("heading");headings->addWidget(heading);
-    top->addLayout(headings);top->addStretch();auto* readonly=new QLabel("Read only");readonly->setStyleSheet("color:#efc171; padding:8px; border:1px solid #74643d; border-radius:3px;");
+    detailsHeader_->addLayout(headings);
+    auto* top=new QHBoxLayout;
+    top->addStretch();auto* readonly=new QLabel("Read only");readonly->setStyleSheet("color:#efc171; padding:8px; border:1px solid #74643d; border-radius:3px;");
     readonly->setMaximumHeight(34);top->addWidget(readonly);
     auto* departures = new QPushButton("Airports / railways");
     departures->setObjectName("openDepartures");
@@ -166,7 +169,7 @@ CodexBoard::CodexBoard(const QString& fixture,QWidget* parent):QWidget(parent),f
     top->addWidget(departures);
     auto* preferences=new QPushButton("Display settings");preferences->setObjectName("openSettings");
     connect(preferences,&QPushButton::clicked,this,[this]{openSettings();});top->addWidget(preferences);
-    clock_=new QLabel;top->addWidget(clock_);layout->addLayout(top);
+    clock_=new QLabel;top->addWidget(clock_);detailsHeader_->addLayout(top,1);layout->addLayout(detailsHeader_);
     connection_=new QLabel("Connecting…");connection_->setTextFormat(Qt::PlainText);connection_->setObjectName("connection");connection_->setWordWrap(true);layout->addWidget(connection_);
     auto* controls=new QHBoxLayout;
     search_=new QLineEdit;search_->setObjectName("sessionSearch");search_->setPlaceholderText("Search sessions, projects or agents");search_->setClearButtonEnabled(true);
@@ -174,7 +177,7 @@ CodexBoard::CodexBoard(const QString& fixture,QWidget* parent):QWidget(parent),f
     filter_->addItem("All sessions", "all");filter_->addItem("Active / waiting", "live");filter_->addItem("Needs attention", "attention");filter_->addItem("History", "history");controls->addWidget(filter_);
     archives_=new QCheckBox("Archived");archives_->setObjectName("archives");controls->addWidget(archives_);
     auto* refreshButton=new QPushButton("Refresh");refreshButton->setObjectName("refresh");controls->addWidget(refreshButton);layout->addLayout(controls);
-    summary_=new QLabel;summary_->setObjectName("summary");layout->addWidget(summary_);
+    summary_=new QLabel;summary_->setObjectName("summary");summary_->setWordWrap(true);layout->addWidget(summary_);
     splitter_=new QSplitter;splitter_->setChildrenCollapsible(false);layout->addWidget(splitter_,1);
     auto* sessionsPane=new QWidget;auto* sl=new QVBoxLayout(sessionsPane);sl->setContentsMargins(0,0,0,0);sl->setSpacing(8);
     list_=new QTreeWidget;list_->setObjectName("sessions");list_->setColumnCount(4);list_->setHeaderLabels({"Session / subagent","Current state","Project","Updated"});
@@ -469,10 +472,14 @@ void CodexBoard::openDetails(int row) {
 void CodexBoard::placeDialog(QDialog* dialog) {
     QScreen* target=screen();if (!target) target=QGuiApplication::primaryScreen();if (!target) return;
     dialog->setScreen(target);
-    dialog->ensurePolished();if (dialog->layout()) dialog->layout()->activate();
+    dialog->ensurePolished();
     const QRect area=target->availableGeometry().adjusted(16,16,-16,-16);
     const QSize frame=dialog->frameGeometry().size()-dialog->size();
     const QSize maximum(qMax(1,area.width()-qMax(0,frame.width())),qMax(1,area.height()-qMax(0,frame.height())));
+    // Choose the compact layout before Qt computes its minimum window size.
+    // Otherwise the wide header can prevent resizing to a small work area.
+    if (dialog==details_) updateDetailsLayout(qMin(dialog->width(),maximum.width()));
+    if (dialog->layout()) {dialog->layout()->invalidate();dialog->layout()->activate();}
     dialog->setMaximumSize(maximum);dialog->resize(dialog->size().boundedTo(maximum));
     QRect geometry=dialog->frameGeometry();geometry.moveCenter(area.center());dialog->move(geometry.topLeft());
 }
@@ -520,11 +527,14 @@ void CodexBoard::placeHyprDialog(QDialog* dialog,int attempt) {
     query->start("hyprctl",{"-j","clients"});
 }
 
+void CodexBoard::updateDetailsLayout(int width) {
+    detailsHeader_->setDirection(width<1000?QBoxLayout::TopToBottom:QBoxLayout::LeftToRight);
+    splitter_->setOrientation(width<1150?Qt::Vertical:Qt::Horizontal);
+    list_->setColumnHidden(2,width<850);list_->setColumnHidden(3,width<850);
+}
+
 bool CodexBoard::eventFilter(QObject* watched,QEvent* event) {
-    if (watched==details_ && event->type()==QEvent::Resize) {
-        splitter_->setOrientation(details_->width()<1150?Qt::Vertical:Qt::Horizontal);
-        list_->setColumnHidden(2,details_->width()<850);list_->setColumnHidden(3,details_->width()<850);
-    }
+    if (watched==details_ && event->type()==QEvent::Resize) updateDetailsLayout(details_->width());
     return QWidget::eventFilter(watched,event);
 }
 

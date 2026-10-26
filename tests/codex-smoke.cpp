@@ -105,6 +105,13 @@ int main(int argc,char** argv) {
             board.resize(size);QTest::qWait(30);check(board.size()==size,"responsive window keeps requested size");
             check((details->resize(size), QTest::qWait(20), details->findChild<QSplitter*>()->orientation()==(details->width()<1150?Qt::Vertical:Qt::Horizontal)),"narrow layout stacks details");
             check(text->mapTo(details,QPoint(text->width(),text->height())).y()<=details->height(),"event panel fits window");
+            auto* heading=details->findChild<QLabel*>("heading");
+            for (const auto* name:{"openDepartures","openSettings"}) {
+                auto* button=details->findChild<QPushButton*>(name);
+                check(details->rect().contains(QRect(button->mapTo(details,QPoint()),button->size())),"header actions fit narrow window");
+                if (details->width()<1000)
+                    check(button->mapTo(details,QPoint()).y()>heading->mapTo(details,QPoint(0,heading->height())).y(),"narrow header places actions below title");
+            }
         }
         details->resize(1400,800);QTest::qWait(30);QDir().mkpath("test-output");details->grab().save("test-output/codex-details-demo.png");
         text->setFocus();QTest::keyClick(text,Qt::Key_Escape);check(!details->isVisible() && board.isVisible(),"Escape closes details and retains board");

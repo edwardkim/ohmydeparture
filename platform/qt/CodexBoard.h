@@ -21,6 +21,7 @@ class BoardView;
 class QDialog;
 class QSpinBox;
 class QDoubleSpinBox;
+class QBoxLayout;
 
 class CodexBoard : public QWidget {
 public:
@@ -52,12 +53,14 @@ private:
     void selected();
     void disconnected(const QString& reason);
     void syncBoard();
+    void updateDetailsLayout(int width);
     void placeDialog(QDialog* dialog);
     void placeHyprDialog(QDialog* dialog, int attempt = 0);
     std::function<void(int)> departuresHandler_;
     BoardView* flap_;
     QDialog* details_;
     QDialog* settings_;
+    QBoxLayout* detailsHeader_;
     QSpinBox* flipInterval_;
     QDoubleSpinBox* flipDuration_;
     QStringList visibleIds_;
