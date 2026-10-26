@@ -3,7 +3,11 @@
 
 #include <QApplication>
 #include <QCryptographicHash>
+#include <QFile>
 #include <QFontDatabase>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QtTest/QTest>
@@ -37,6 +41,20 @@ int main(int argc, char** argv)
     be_app = &bridge;
 
     try {
+        QFile airportCodes(":/data/airport-codes.json");
+        check(airportCodes.open(QIODevice::ReadOnly), "airport code reference bundled for offline use");
+        const auto reference = QJsonDocument::fromJson(airportCodes.readAll()).object();
+        check(reference.value("schema_version").toInt() == 1
+            && reference.value("record_count").toInt() > 0
+            && reference.value("items").toArray().size() == reference.value("record_count").toInt(),
+            "bundled airport code reference is complete JSON");
+        QFile airportDetails(":/data/airport-details.json");
+        check(airportDetails.open(QIODevice::ReadOnly), "airport details bundled for offline use");
+        const auto details = QJsonDocument::fromJson(airportDetails.readAll()).object();
+        check(details.value("schema_version").toInt() == 1
+            && details.value("record_count").toInt() > 0
+            && details.value("items").toArray().size() == details.value("record_count").toInt(),
+            "bundled airport details are complete JSON");
         BoardView board(BRect(0, 0, 1599, 899), 0);
         board.show();
         QTest::qWait(100);
@@ -68,12 +86,22 @@ int main(int argc, char** argv)
         }
 
         board.SetAirport(0);
-        bool menuOpened = false;
+        bool menuOpened = false, selectionCorrect = false, selectionExclusive = false, quitIsCommand = false;
         QTimer::singleShot(20, [&] {
             auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
             if (!menu) return;
             menuOpened = true;
-            menu->setActiveAction(menu->actions().at(kAirportCount + 1));
+            const auto actions = menu->actions();
+            int checked = 0;
+            for (const auto* action : actions) checked += action->isChecked();
+            selectionCorrect = checked == 1 && actions.first()->isChecked();
+            quitIsCommand = !actions.last()->isCheckable();
+            auto* station = actions.at(kAirportCount + 1);
+            station->setChecked(true);
+            checked = 0;
+            for (const auto* action : actions) checked += action->isChecked();
+            selectionExclusive = checked == 1 && station->isChecked() && !actions.first()->isChecked();
+            menu->setActiveAction(station);
             QTest::keyClick(menu, Qt::Key_Return);
         });
         QTimer::singleShot(1500, [] {
@@ -81,19 +109,26 @@ int main(int argc, char** argv)
         });
         QTest::mouseClick(&board, Qt::LeftButton, Qt::NoModifier, QPoint(1530, 30));
         check(menuOpened, "gear opens a native popup menu");
+        check(selectionCorrect, "departure menu checks only the active airport");
+        check(selectionExclusive, "airport and station selections are mutually exclusive");
+        check(quitIsCommand, "quit has no selection checkbox");
         check(board.AirportIndex() == kAirportCount + 1, "popup selection opens Seoul station");
 
-        bool codexSelected = false;
+        bool codexSelected = false, stationOnlyChecked = false;
         board.SetCodexHandler([&] { codexSelected = true; });
         QTimer::singleShot(20, [&] {
             auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
             if (!menu) return;
+            int checked = 0;
+            for (const auto* action : menu->actions()) checked += action->isChecked();
+            stationOnlyChecked = checked == 1 && menu->actions().at(kAirportCount + 1)->isChecked();
             for (auto* action : menu->actions()) if (action->text().startsWith("Codex")) {
                 menu->setActiveAction(action); QTest::keyClick(menu, Qt::Key_Return); break;
             }
         });
         QTest::mouseClick(&board, Qt::LeftButton, Qt::NoModifier, QPoint(1530, 30));
         check(codexSelected, "airport menu exposes Codex and invokes view switching");
+        check(stationOnlyChecked, "station menu checks only the active station");
 
         QTest::keyClick(&board, Qt::Key_F11);
         check(board.isFullScreen(), "F11 enters fullscreen");
@@ -108,7 +143,7 @@ int main(int argc, char** argv)
         QTimer::singleShot(0, [&] { QTest::keyClick(&board, Qt::Key_Escape); });
         QTimer::singleShot(1000, [] { QCoreApplication::exit(3); });
         check(app.exec() == 0, "Escape quits the application");
-        std::puts("PASS: animation, keyboard, settings, resize, 12 boards, popup, fullscreen, cursor, quit");
+        std::puts("PASS: offline airport codes, animation, keyboard, settings, resize, 12 boards, popup, fullscreen, cursor, quit");
         return 0;
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL: %s\n", error.what());

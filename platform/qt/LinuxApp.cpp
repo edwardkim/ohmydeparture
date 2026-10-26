@@ -1,4 +1,4 @@
-/* Linux entry point. The renderer and generated timetables are shared with Haiku. */
+/* Linux entry point. ICN uses a provider snapshot; other travel boards share Haiku's generated data. */
 #include "Board.h"
 #include "Branding.h"
 #include "Station.h"
@@ -71,7 +71,7 @@ int main(int argc, char** argv)
 
     QCommandLineParser parser;
     parser.setApplicationDescription("Departure boards and read-only Codex session monitoring for Linux / Omarchy.\n"
-        "Timetables are generated, not live travel information.\n"
+        "ICN uses a dated provider snapshot; other travel timetables are generated.\n"
         "Departures: Esc/Q quits, arrows/Space changes board. Codex: Esc quits.\n"
         "F11: toggle full screen.");
     parser.addHelpOption();

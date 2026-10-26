@@ -32,9 +32,16 @@ This makes four provider requests: departures/arrivals in JSON/XML. It is an
 opt-in network check that consumes the user's quota, separate from `make test`.
 Use placeholders in `.env.example` and keep real keys in the ignored `.env`.
 
+`python3 tools/fetch-icn-departures.py` downloads the full current ICN departure
+day and atomically replaces `data/icn-departures.json`. Rebuild to embed it and
+restart the app. `make test-icn` tests pagination and the snapshot model offline;
+`make test` includes these checks. Snapshot refreshes are explicit network calls,
+separate from builds and tests.
+
 ## Layout
 
 - `src/`: shared split-flap renderer and inherited travel boards.
+- `data/`: bundled city/airport references, source CSV, metadata and update notes.
 - `platform/qt/`: Qt compatibility layer, windows, settings and UI socket.
 - `platform/codex/reader.py`: standard-library read-only Codex adapter.
 - `packaging/omarchy/`: widget, bundled installer and installation guides.

@@ -262,7 +262,7 @@ static const Route kHongKong[] = {
 const Airport kAirports[] = {
 	{ "ICN", LANG_KO, "인천국제공항", "INCHEON INTERNATIONAL AIRPORT",
 		9 * 60, DST_NONE, "", 10, 132, true, ROUTES(kIncheon),
-		{ LANG_KO, LANG_EN, LANG_DEST }, 3 },
+		{ LANG_EN, LANG_KO, LANG_DEST }, 3 },
 	{ "NRT", LANG_JA, "成田国際空港", "NARITA INTERNATIONAL AIRPORT",
 		9 * 60, DST_NONE, "", 11, 99, true, ROUTES(kNarita),
 		{ LANG_JA, LANG_EN, LANG_DEST }, 3 },

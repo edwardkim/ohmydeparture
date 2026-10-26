@@ -49,6 +49,41 @@ int main(int argc,char** argv) {
         QSettings().clear();legacy.clear();
         CodexBoard board("tests/codex-fixture.json");board.show();QTest::qWait(80);
         check(board.flapBoard()->CodexRowCount()==4,"main view uses original renderer with four root sessions");
+        bool codexOnlyChecked=false, commandsUnchecked=false;
+        QTimer::singleShot(20,[&]{
+            auto* menu=qobject_cast<QMenu*>(QApplication::activePopupWidget());
+            if (!menu) return;
+            int checked=0;QAction* selected=nullptr;bool plainCommands=true;
+            for (auto* action:menu->actions()) {
+                if (action->isChecked()) {++checked;selected=action;}
+                if (action->text().startsWith("Session browser") || action->text().startsWith("Display settings") || action->text()=="Quit")
+                    plainCommands=plainCommands && !action->isCheckable();
+            }
+            codexOnlyChecked=checked==1 && selected && selected->text().startsWith("Codex");
+            commandsUnchecked=plainCommands;
+            QTest::keyClick(menu,Qt::Key_Escape);
+        });
+        QTimer::singleShot(1500,[]{if (auto* popup=QApplication::activePopupWidget()) popup->close();});
+        QTest::mouseClick(board.flapBoard(),Qt::LeftButton,Qt::NoModifier,QPoint(board.flapBoard()->width()-70,30));
+        check(codexOnlyChecked,"Codex menu checks only Codex, with no airport or station selected");
+        check(commandsUnchecked,"details, settings and quit are commands, not checkboxes");
+        QTest::mouseClick(board.flapBoard(),Qt::LeftButton,Qt::NoModifier,QPoint(330,110));
+        check(!board.historyVisible() && !board.detailsWindow()->isVisible(),"single click does not navigate or open a dialog");
+        QTest::mouseDClick(board.flapBoard(),Qt::LeftButton,Qt::NoModifier,QPoint(330,110));
+        check(board.historyVisible() && board.historySessionId()=="demo-approval","double click opens the chosen session history in the same window");
+        check(!board.detailsWindow()->isVisible() && board.historyBoard()->CodexRowCount()>3,"session history uses the flap renderer instead of a dialog");
+        board.historyBoard()->SetCodexFlipInterval(0);QTest::qWait(3400);
+        board.grab().save("test-output/codex-history-demo.png");
+        board.historyBoard()->SetCodexFlipInterval(3);
+        QTest::keyClick(board.historyBoard(),Qt::Key_Left);
+        check(!board.historyVisible() && board.flapBoard()->isVisible(),"left arrow restores the session board");
+        auto* sessionTree=board.detailsWindow()->findChild<QTreeWidget*>("sessions");
+        sessionTree->topLevelItem(0)->setExpanded(true);
+        QTest::mouseDClick(board.flapBoard(),Qt::LeftButton,Qt::NoModifier,QPoint(330,148));
+        check(board.historyVisible() && board.historySessionId()=="demo-child","double click a child agent opens that child's own history");
+        QTest::mouseClick(board.historyBoard(),Qt::LeftButton,Qt::NoModifier,QPoint(80,30));
+        check(!board.historyVisible() && board.flapBoard()->isVisible(),"flap back button restores the session board");
+        sessionTree->topLevelItem(0)->setExpanded(false);
         board.openDetails(0);
         auto* details=board.detailsWindow();
         check(details->isVisible(),"main row opens supplementary details");
@@ -59,10 +94,10 @@ int main(int argc,char** argv) {
         check(qAbs(details->frameGeometry().center().x()-available.center().x())<=2,"details is centred across monitor width");
         board.move(0,0);
         board.openSettings();auto* interval=board.settingsWindow()->findChild<QSpinBox*>("flipInterval");
-        check(interval->value()==3 && board.flapBoard()->CodexFlipInterval()==3,"default periodic flip interval is three seconds");
+        check(interval->value()==3 && board.flapBoard()->CodexFlipInterval()==3 && board.historyBoard()->CodexFlipInterval()==3,"both flap screens default to a three-second repeat interval");
         auto* duration=board.settingsWindow()->findChild<QDoubleSpinBox*>("flipDuration");
         check(qAbs(duration->value()-.65)<.001 && board.flapBoard()->CodexFlipDurationMs()==650,"default individual flip lasts 650 milliseconds");
-        duration->setValue(.9);check(QSettings().value("codex/flipDurationMs").toInt()==900 && board.flapBoard()->CodexFlipDurationMs()==900,"flip duration applies and persists separately from repeat interval");
+        duration->setValue(.9);check(QSettings().value("codex/flipDurationMs").toInt()==900 && board.flapBoard()->CodexFlipDurationMs()==900 && board.historyBoard()->CodexFlipDurationMs()==900,"flip duration applies to both flap screens and persists");
         duration->setValue(.65);
         QDir().mkpath("test-output");board.settingsWindow()->grab().save("test-output/codex-flip-settings.png");
         check(available.contains(board.settingsWindow()->frameGeometry()),"settings fits monitor bounds");
@@ -151,10 +186,12 @@ int main(int argc,char** argv) {
         check(await([&]{return localList->topLevelItemCount()==1;}),"async reader returns local session");
         check(localList->topLevelItem(0)->data(1,Qt::UserRole+1)=="history","disconnected local state is history");
         check(await([&]{return local.detailsWindow()->findChild<QTreeWidget*>("history")->topLevelItemCount()==1;}),"async history request completes");
+        local.openSessionHistory(0);check(local.historyVisible() && local.historySessionId()=="local-root","local stored session opens its own flap history");
         // Archive response must not retain the old selection, events, or more button.
         local.detailsWindow()->findChild<QCheckBox*>("archives")->setChecked(true);
         check(await([&]{return localList->topLevelItemCount()==0;}),"archive mode excludes active rollouts");
         check(local.detailsWindow()->findChild<QPlainTextEdit*>("eventContent")->toPlainText().isEmpty(),"archive clears stale content");
+        check(local.historyBoard()->CodexRowCount()==1,"removing the selected session replaces its flap history with a placeholder");
         std::puts("PASS: session tree, child/search/filter, turn/tool details, responsive layout, keys, async local fallback, archives");
         return 0;
     } catch (const std::exception& e) {std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}

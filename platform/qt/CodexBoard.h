@@ -22,6 +22,7 @@ class QDialog;
 class QSpinBox;
 class QDoubleSpinBox;
 class QBoxLayout;
+class QStackedLayout;
 
 class CodexBoard : public QWidget {
 public:
@@ -30,6 +31,11 @@ public:
     bool loadFixture(const QString& path, QString* error);
     void setDeparturesHandler(std::function<void(int)> handler) { departuresHandler_ = std::move(handler); }
     void openDetails(int row = -1);
+    void openSessionHistory(int row);
+    void showSessionBoard();
+    bool historyVisible() const;
+    BoardView* historyBoard() const { return historyFlap_; }
+    QString historySessionId() const { return historySessionId_; }
     void openSettings();
     BoardView* flapBoard() const { return flap_; }
     QDialog* detailsWindow() const { return details_; }
@@ -53,11 +59,16 @@ private:
     void selected();
     void disconnected(const QString& reason);
     void syncBoard();
+    void syncHistoryBoard();
     void updateDetailsLayout(int width);
     void placeDialog(QDialog* dialog);
     void placeHyprDialog(QDialog* dialog, int attempt = 0);
     std::function<void(int)> departuresHandler_;
     BoardView* flap_;
+    BoardView* historyFlap_;
+    QStackedLayout* pages_;
+    QString historySessionId_;
+    QJsonObject historySession_;
     QDialog* details_;
     QDialog* settings_;
     QBoxLayout* detailsHeader_;

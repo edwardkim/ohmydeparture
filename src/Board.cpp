@@ -19,6 +19,8 @@
 #include <QColor>
 #include <QDir>
 #include <QFontMetricsF>
+#include <QTimeZone>
+#include <QMouseEvent>
 #endif
 
 #ifndef RDEPARTURES_QT
@@ -75,6 +77,11 @@ static const int kColumnStart[] = { 0, 6, 12, 29, 39, 47, 52 };
 static const int kColumnCells[] = { 5, 5, 16, 9, 7, 4, 16 };
 enum { COL_TIME = 0, COL_NEW, COL_DEST, COL_AIRLINE, COL_FLIGHT, COL_GATE,
 	COL_REMARKS, COL_COUNT };
+#ifdef RDEPARTURES_QT
+static const int kHistoryColumnStart[] = {0,6,17,56};
+static const int kHistoryColumnCells[] = {5,10,38,12};
+static const int kHistoryColumnCount = 4;
+#endif
 
 static const char* kMenuNames[] = {
 	"Seoul Incheon  인천 (ICN)",
@@ -284,7 +291,19 @@ BoardView::MouseDown(BPoint where)
 	if (fGearRect.Contains(where))
 		_ShowMenu(fGearRect.LeftBottom());
 #ifdef RDEPARTURES_QT
-    else if (fCodexMode && fRowHandler) {
+    else if (fCodexHistoryMode && fBackHandler
+        && where.x >= fCells[fFields[fDateField].first].frame.left
+        && where.x <= fCells[fFields[fDateField].first + fFields[fDateField].count-1].frame.right
+        && where.y >= fCells[fFields[fDateField].first].frame.top
+        && where.y <= fCells[fFields[fDateField].first].frame.bottom) fBackHandler();
+#endif
+}
+
+#ifdef RDEPARTURES_QT
+void BoardView::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button()==Qt::LeftButton && fCodexMode && !fCodexHistoryMode && fRowHandler) {
+        const BPoint where(event->position().x(),event->position().y());
         for (int row = 0; row < fRows; ++row) {
             const Cell& cell = fCells[fFields[fRowFields + row * COL_COUNT].first];
             if (where.y >= cell.frame.top && where.y <= cell.frame.bottom) {
@@ -293,9 +312,11 @@ BoardView::MouseDown(BPoint where)
                 break;
             }
         }
+        event->accept();return;
     }
-#endif
+    BView::mouseDoubleClickEvent(event);
 }
+#endif
 
 
 void
@@ -309,6 +330,7 @@ void
 BoardView::KeyDown(const char* bytes, int32 numBytes)
 {
 #ifdef RDEPARTURES_QT
+    if (fCodexHistoryMode && bytes[0]==B_LEFT_ARROW && fBackHandler) { fBackHandler();return; }
     if (fCodexMode && (bytes[0] == B_RIGHT_ARROW || bytes[0] == B_LEFT_ARROW || bytes[0] == ' ')) {
         int pages = qMax(1, (int(fCodexRows.size()) + fRows - 1) / fRows);
         fCodexPage = (fCodexPage + (bytes[0] == B_LEFT_ARROW ? pages - 1 : 1)) % pages;
@@ -395,8 +417,43 @@ void BoardView::SetCodexRows(const QJsonArray& rows, const QString& notice)
     else _UpdateCodex();
 }
 
+void BoardView::SetCodexHistory(const QJsonArray& rows, const QJsonObject& session, const QString& notice)
+{
+    const bool changed=!fCodexHistoryMode || fHistorySession!=session;
+    fCodexMode=true;fCodexHistoryMode=true;fStation=-1;fFixedPhase=0;
+    if (fHistorySession.value("id")!=session.value("id")) fCodexPage=0;
+    fHistorySession=session;fCodexRows=rows;fCodexNotice=notice;
+    if (changed || !fBoard) {fLastCodexFlip=system_time();LayoutBoard(Bounds());}
+    else _UpdateCodexHistory();
+}
+
+void BoardView::_UpdateCodexHistory()
+{
+    if (!fBoard) return;
+    fLastUpdate=system_time();
+    _SetField(fDateField,"← BACK",COLOR_YELLOW,0);
+    const auto clock=QDateTime::currentDateTime().toString("HH:mm");
+    _SetField(fClockField,clock.toUtf8().constData(),COLOR_YELLOW,0);
+    _SetField(fTitleField,"HISTORY",COLOR_WHITE,0);
+    const int pages=qMax(1,(int(fCodexRows.size())+fRows-1)/fRows);
+    fCodexPage=qMin(fCodexPage,pages-1);
+    const auto footer=fCodexNotice+QString(" | ← BACK | → PAGE %1/%2").arg(fCodexPage+1).arg(pages);
+    _SetField(fFooterField,footer.toUtf8().constData(),COLOR_YELLOW,0);
+    for (int row=0;row<fRows;++row) {
+        const int first=fRowFields+row*kHistoryColumnCount,index=fCodexPage*fRows+row;
+        const auto item=index<fCodexRows.size()?fCodexRows[index].toObject():QJsonObject();
+        const QString values[]={item["time"].toString(),item["event"].toString(),item["text"].toString(),item["result"].toString()};
+        const auto state=item["status"].toString();
+        const int resultColor=state=="failed"||state=="error"?COLOR_RED
+            :state=="inProgress"||state=="running"?COLOR_YELLOW:state=="completed"?COLOR_GREEN:COLOR_GRAY;
+        for (int column=0;column<kHistoryColumnCount;++column)
+            _SetField(first+column,values[column].toUtf8().constData(),column==0?COLOR_YELLOW:column==3?resultColor:COLOR_WHITE,row*30000);
+    }
+}
+
 void BoardView::_UpdateCodex()
 {
+    if (fCodexHistoryMode) {_UpdateCodexHistory();return;}
     if (!fBoard) return;
     fLastUpdate = system_time();
     QDateTime now = QDateTime::currentDateTime();
@@ -460,17 +517,19 @@ void BoardView::SetCodexFlipDurationMs(int milliseconds)
 
 void BoardView::_FlipCodexRows(bigtime_t now)
 {
+    const int columns=fCodexHistoryMode?kHistoryColumnCount:COL_COUNT;
+    const int maxCharacter=fCodexHistoryMode?37:15;
     const int count = qMin(fRows, int(fCodexRows.size()) - fCodexPage * fRows);
     if (count <= 0) return;
     const bigtime_t duration = bigtime_t(fCodexFlipDurationMs) * 1000;
     const bigtime_t budget = qMax<bigtime_t>(0, bigtime_t(fCodexFlipInterval) * 1000000 - duration - 200000);
-    const bigtime_t desired = (count - 1) * 80000 + 6 * 45000 + 15 * 18000;
+    const bigtime_t desired = (count - 1) * 80000 + (columns-1) * 45000 + maxCharacter * 18000;
     const double pace = qMin(1.0, double(budget) / qMax<bigtime_t>(1, desired));
     const bigtime_t rowStep = bigtime_t(80000 * pace), colStep = bigtime_t(45000 * pace), charStep = bigtime_t(18000 * pace);
-    fCodexSweepEnd = now + (count - 1) * rowStep + 6 * colStep + 15 * charStep + duration + 100000;
+    fCodexSweepEnd = now + (count - 1) * rowStep + (columns-1) * colStep + maxCharacter * charStep + duration + 100000;
     for (int row = 0; row < fRows && fCodexPage * fRows + row < fCodexRows.size(); ++row) {
-        for (int col = 0; col < COL_COUNT; ++col) {
-            const Field& field = fFields[fRowFields + row * COL_COUNT + col];
+        for (int col = 0; col < columns; ++col) {
+            const Field& field = fFields[fRowFields + row * columns + col];
             Unit units[96];
             const int unitCount = split_units(field.text.String(), units, 96);
             int position = 0;
@@ -731,6 +790,13 @@ BoardView::LayoutBoard(BRect bounds)
 	fRowFields = fFieldCount;
 	for (int r = 0; r < fRows; r++) {
 		float y = rowsTop + r * rowStep;
+#ifdef RDEPARTURES_QT
+        if (fCodexHistoryMode) {
+            for (int c=0;c<kHistoryColumnCount;++c)
+                _AddField(SIZE_ROW,BPoint(x0+kHistoryColumnStart[c]*cw,y),kHistoryColumnCells[c],ALIGN_LEFT);
+            continue;
+        }
+#endif
 		for (int c = 0; c < COL_COUNT; c++) {
 			BPoint at(x0 + kColumnStart[c] * cw, y);
 			if (c == COL_AIRLINE)
@@ -1012,6 +1078,80 @@ void BoardView::_SetProject(int index, const QString& project, const QString& pa
     if (field.text == text) return;
     field.text = text;
     _Enqueue(fCells[field.first], _ProjectFace(project,path), NULL, 0, system_time() + delay);
+}
+
+void BoardView::_SetFlightAirline(int index, const QString& code, const QString& name, bigtime_t delay)
+{
+    for (int airline = 0; airline < airline_count(); ++airline) {
+        if (!code.isEmpty() && code == QString::fromLatin1(airline_at(airline)->code)) {
+            _SetAirline(index, airline, delay); return;
+        }
+    }
+    const QString identity = code.isEmpty() ? name : code;
+    const QString label = code.isEmpty() ? name : code;
+    Field& field = fFields[index];
+    BString text; text << "ICN-AIRLINE|" << identity.toUtf8().constData();
+    if (field.text == text) return;
+    field.text = text;
+    BString key; key << "AIRLINE|" << identity.toUtf8().constData();
+    const uint32 hash = hash_key(key);
+    const QColor color = QColor::fromHsl(hash % 360, 165, 95);
+    BBitmap* face = _ColoredFace(key, label.toUtf8().constData(),
+        make_color(color.red(), color.green(), color.blue()), make_color(255,255,255));
+    _Enqueue(fCells[field.first], face, NULL, 0, system_time() + delay);
+}
+
+void BoardView::_UpdateIcn(bool phaseChanged)
+{
+    if (!fIcnLoaded) { fIcnDepartures.load(); fIcnLoaded = true; }
+    const QDateTime now = QDateTime::fromSecsSinceEpoch(time(NULL) + gTimeOffset).toTimeZone(QTimeZone("Asia/Seoul"));
+    const int lang = _PhaseLang();
+    const bool korean = lang == LANG_KO;
+    const int titleLang = korean ? LANG_KO : LANG_EN;
+    const int64 local = airport_local_minutes(kAirports[fAirport], time(NULL) + gTimeOffset);
+    char buffer[64];
+    format_date(buffer, sizeof(buffer), local, titleLang);
+    _SetField(fDateField, buffer, COLOR_DATE, 0);
+    snprintf(buffer, sizeof(buffer), "%02d:%02d", int(local % 1440 / 60), int(local % 60));
+    _SetField(fClockField, buffer, COLOR_YELLOW, 0);
+    _SetField(fTitleField, title_text(titleLang), COLOR_WHITE, 0);
+    const auto rows = fIcnDepartures.visibleRows(now, fRows);
+    QString notice = fIcnDepartures.notice(now);
+    if (rows.isEmpty() && fIcnDepartures.error().isEmpty() && fIcnDepartures.date() == now.date())
+        notice += " / NO MORE DEPARTURES";
+    _SetField(fFooterField, notice.toUtf8().constData(), COLOR_YELLOW, phaseChanged ? 300000 : 0);
+    for (int row = 0; row < fRows; ++row) {
+        const int first = fRowFields + row * COL_COUNT;
+        const bigtime_t delay = row * 45000;
+        if (row >= rows.size()) {
+            for (int column = 0; column < COL_COUNT; ++column) {
+                if (column == COL_AIRLINE) _SetAirline(first + column, -1, delay);
+                else _SetField(first + column, "", COLOR_WHITE, delay);
+            }
+            continue;
+        }
+        const auto& flight = rows[row];
+        const auto scheduled = flight.scheduled.toString("HH:mm");
+        const auto changed = flight.estimated.isValid() && flight.estimated != flight.scheduled
+            ? flight.estimated.toString("HH:mm") : QString();
+        _SetField(first + COL_TIME, scheduled.toUtf8().constData(), COLOR_YELLOW, delay);
+        _SetField(first + COL_NEW, changed.toUtf8().constData(), COLOR_ORANGE, delay);
+        auto destination = korean ? flight.destinationKorean : flight.destinationEnglish;
+        int destinationCells = 0;
+        for (const auto codepoint : destination.toUcs4()) destinationCells += is_wide(codepoint) ? 2 : 1;
+        if (destinationCells > fFields[first + COL_DEST].count && destination.contains('/'))
+            destination = destination.section('/', 0, 0).trimmed();
+        _SetField(first + COL_DEST, destination.toUtf8().constData(), COLOR_WHITE, delay);
+        _SetFlightAirline(first + COL_AIRLINE, flight.airlineCode, flight.airlineName, delay);
+        _SetField(first + COL_FLIGHT, flight.flightId.toUtf8().constData(), COLOR_WHITE, delay);
+        _SetField(first + COL_GATE, flight.gate.toUtf8().constData(), COLOR_WHITE, delay);
+        const int color = flight.tone == IcnDeparture::Muted ? COLOR_GRAY
+            : flight.tone == IcnDeparture::Attention ? COLOR_ORANGE
+            : flight.tone == IcnDeparture::Boarding ? COLOR_YELLOW
+            : flight.tone == IcnDeparture::Error ? COLOR_RED : COLOR_WHITE;
+        const auto remark = korean ? flight.remarkKorean : flight.remarkEnglish;
+        _SetField(first + COL_REMARKS, remark.toUtf8().constData(), color, delay);
+    }
 }
 #endif
 
@@ -1386,6 +1526,9 @@ BoardView::_UpdateContent(bool phaseChanged)
     if (fCodexMode) { _UpdateCodex(); return; }
 #endif
 	fLastUpdate = system_time();
+#ifdef RDEPARTURES_QT
+    if (fAirport == 0) { _UpdateIcn(phaseChanged); return; }
+#endif
 	const Airport& airport = kAirports[fAirport];
 	int64 now = airport_local_minutes(airport, time(NULL) + gTimeOffset);
 	int lang = _PhaseLang();
@@ -1563,8 +1706,15 @@ BoardView::_DrawStatic()
 	float small = th * 0.30f;
 #ifdef RDEPARTURES_QT
     if (fCodexMode) {
-        draw_text(v, "Oh My Departure", BPoint(nameLeft, titleFrame.top + th * .44f), big, kLabel, fMain, fFallback, fCJK);
-        draw_text(v, "CODEX SESSIONS / READ ONLY", BPoint(nameLeft, titleFrame.top + th * .88f), small, kLabelEnglish, fMain, fFallback, fCJK);
+        QString heading=fCodexHistoryMode?fHistorySession["title"].toString():QString("Oh My Departure");
+        QString subheading=fCodexHistoryMode?fHistorySession["project"].toString()+" / "+fHistorySession["id"].toString().right(8)+" / READ ONLY"
+            :QString("CODEX SESSIONS / READ ONLY");
+        BFont headingFont(font_for(heading.toUtf8().constData(),fMain,fFallback,fCJK));headingFont.SetSize(big);
+        heading=QFontMetricsF(headingFont.QtFont()).elidedText(heading,Qt::ElideRight,qMax(1.0f,fGearRect.left-nameLeft-fCW));
+        BFont subtitleFont(font_for(subheading.toUtf8().constData(),fMain,fFallback,fCJK));subtitleFont.SetSize(small);
+        subheading=QFontMetricsF(subtitleFont.QtFont()).elidedText(subheading,Qt::ElideRight,qMax(1.0f,fGearRect.left-nameLeft-fCW));
+        draw_text(v,heading.toUtf8().constData(),BPoint(nameLeft,titleFrame.top+th*.44f),big,kLabel,fMain,fFallback,fCJK);
+        draw_text(v,subheading.toUtf8().constData(),BPoint(nameLeft,titleFrame.top+th*.88f),small,kLabelEnglish,fMain,fFallback,fCJK);
     } else {
 #endif
 	if (airport.nameEnglish[0] != '\0') {
@@ -1587,9 +1737,21 @@ BoardView::_DrawStatic()
 
 	// Column labels: the airport's language above English, as at Narita.
 	float rh = fCellHeight[SIZE_ROW];
-	for (int c = 0; c < COL_COUNT; c++) {
-		float x = fX0 + kColumnStart[c] * fCW + 2;
+	int columns=COL_COUNT;
+	const int* starts=kColumnStart;
 #ifdef RDEPARTURES_QT
+    if (fCodexHistoryMode) {columns=kHistoryColumnCount;starts=kHistoryColumnStart;}
+#endif
+	for (int c = 0; c < columns; c++) {
+		float x = fX0 + starts[c] * fCW + 2;
+#ifdef RDEPARTURES_QT
+        if (fCodexHistoryMode) {
+            static const char* primary[]={"TIME","EVENT","RECENT HISTORY","RESULT"};
+            static const char* secondary[]={"TURN","TYPE","CONTENT PREVIEW","TURN / ITEM"};
+            draw_text(v,primary[c],BPoint(x,fLabelTop+rh*.40f),rh*.36f,kLabel,fMain,fFallback,fCJK);
+            draw_text(v,secondary[c],BPoint(x,fLabelTop+rh*.80f),rh*.30f,kLabelEnglish,fMain,fFallback,fCJK);
+            continue;
+        }
         if (fCodexMode) {
             static const char* primary[] = {"UPDATED", "SESSION", "TASK", "PROJECT", "AGENT", "SUB", "STATUS"};
             static const char* en[] = {"TIME", "ID", "TITLE", "FOLDER", "ROLE", "COUNT", "RUNTIME"};
@@ -1620,18 +1782,22 @@ void
 BoardView::_ShowMenu(BPoint where)
 {
 	BPopUpMenu menu("airports", false, false);
+	bool travelMode = true;
+#ifdef RDEPARTURES_QT
+    travelMode = !fCodexMode;
+#endif
 	for (int i = 0; i < kAirportCount; i++) {
 		BMessage* message = new BMessage(MSG_SET_AIRPORT);
 		message->AddInt32("airport", i);
 		BMenuItem* item = new BMenuItem(kMenuNames[i], message);
-		item->SetMarked(fStation < 0 && i == fAirport);
+		item->SetMarked(travelMode && fStation < 0 && i == fAirport);
 		menu.AddItem(item);
 	}
 	for (int i = 0; i < kStationCount; i++) {
 		BMessage* message = new BMessage(MSG_SET_AIRPORT);
 		message->AddInt32("airport", kAirportCount + i);
 		BMenuItem* item = new BMenuItem(kStations[i].menuName, message);
-		item->SetMarked(fStation == i);
+		item->SetMarked(travelMode && fStation == i);
 		menu.AddItem(item);
 	}
 	// A line, then quitting, in the board's language.
@@ -1640,7 +1806,7 @@ BoardView::_ShowMenu(BPoint where)
     BMenuItem* codex = new BMenuItem("Codex sessions & agents", new BMessage('cdex'));
     codex->SetMarked(fCodexMode);
     menu.AddItem(codex);
-    if (fCodexMode) menu.AddItem(new BMenuItem("Session details & search…", new BMessage('cdex')));
+    if (fCodexMode) menu.AddItem(new BMenuItem("Session browser & search…", new BMessage('cbrw')));
     if (fCodexMode) menu.AddItem(new BMenuItem("Display settings…", new BMessage('cset')));
 #endif
 	int lang = fStation < 0 ? kAirports[fAirport].lang
@@ -1672,6 +1838,9 @@ BoardView::_ShowMenu(BPoint where)
     }
     else if (message->what == 'cset') {
         if (fSettingsHandler) fSettingsHandler();
+    }
+    else if (message->what == 'cbrw') {
+        if (fBrowserHandler) fBrowserHandler();
     }
 #endif
 	else {

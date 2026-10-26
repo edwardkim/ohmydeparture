@@ -71,6 +71,7 @@ void DesktopBoards::showView(const QString& view,int airport) {
             codex_=std::make_unique<CodexBoard>();
             codex_->setDeparturesHandler([this](int index){showView("departures",index);});
         }
+        if (current_!=codex_.get()) codex_->showSessionBoard();
         target=codex_.get();
     } else {
         if (!departures_) {

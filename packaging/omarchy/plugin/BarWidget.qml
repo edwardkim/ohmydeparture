@@ -32,7 +32,7 @@ BarWidget {
     objectName: "ohmydepartureBarButton"
     anchors.fill: parent
     bar: root.bar
-    text: root.setting("view", "codex") === "departures" ? "\uf072" : "\uf489"
+    text: "\uf072"
     tooltipText: "Oh My Departure — " + (root.setting("view", "codex") === "departures" ? "Departures" : "Codex sessions (read-only)")
                  + "\nClick to open or focus · F11: fullscreen · Esc: quit"
     onPressed: function(mouseButton) {

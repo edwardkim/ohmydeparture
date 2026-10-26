@@ -9,6 +9,7 @@
 #include "HaikuTypes.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QFont>
 #include <QImage>
 #include <QMenu>
@@ -272,24 +273,26 @@ extern BApplication* be_app;
 class BMenuItem {
 public:
     BMenuItem(const char* text, BMessage* message) : text_(QString::fromUtf8(text)), message_(message) {}
-    void SetMarked(bool marked) { marked_ = marked; }
+    void SetMarked(bool marked) { marked_ = marked; checkable_ = true; }
     BMessage* Message() { return message_.get(); }
 private:
     friend class BPopUpMenu;
     QString text_;
     std::unique_ptr<BMessage> message_;
     bool marked_ = false;
+    bool checkable_ = false;
     QAction* action_ = nullptr;
 };
 
 class BPopUpMenu {
 public:
-    BPopUpMenu(const char*, bool, bool) {}
+    BPopUpMenu(const char*, bool, bool) : selections_(&menu_) { selections_.setExclusive(true); }
     void AddItem(BMenuItem* item);
     void AddSeparatorItem() { menu_.addSeparator(); }
     BMenuItem* Go(BPoint at, bool, bool);
 private:
     QMenu menu_;
+    QActionGroup selections_;
     std::vector<std::unique_ptr<BMenuItem>> items_;
 };
 
