@@ -9,15 +9,15 @@ from datetime import datetime
 import json
 from pathlib import Path
 import re
-import shlex
 import socket
 import sys
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import Request, build_opener
 import xml.etree.ElementTree as ET
 from zoneinfo import ZoneInfo
+from flightdata.common import NoRedirect, read_env, redact as redact_text
 
 ROOT = Path(__file__).resolve().parent.parent
 OPERATIONS = {'departures': 'getFltDeparturesDeOdp', 'arrivals': 'getFltArrivalsDeOdp'}
@@ -25,19 +25,7 @@ MAX_BYTES = 4 * 1024 * 1024
 
 
 def load_config(path):
-    values = {}
-    for number, line in enumerate(path.read_text(encoding='utf-8-sig').splitlines(), 1):
-        match = re.match(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$', line)
-        if not match:
-            continue
-        try:
-            parts = shlex.split(match[2], comments=True)
-        except ValueError:
-            raise ValueError(f'Invalid quoting in environment file at line {number}') from None
-        if match[1] in ('ICN_EP', 'ICN_KEY'):
-            if len(parts) != 1 or not parts[0]:
-                raise ValueError(f'{match[1]} must have one nonempty value')
-            values[match[1]] = parts[0]
+    values = read_env(path, {'ICN_EP', 'ICN_KEY'})
     if not all(values.get(name) for name in ('ICN_EP', 'ICN_KEY')):
         raise ValueError('Configure ICN_EP and ICN_KEY in the environment file')
     endpoint = urlsplit(values['ICN_EP'])
@@ -102,10 +90,7 @@ def describe_payload(payload):
                 item_fields=sorted({key for item in items for key in item}), items=items)
 
 
-class NoRedirects(HTTPRedirectHandler):
-    # Never forward a credential-bearing URL to another destination.
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+NoRedirects = NoRedirect
 
 
 def probe(endpoint, key, operation, format_name, date, *, page=1, rows=10,
@@ -145,12 +130,7 @@ def probe(endpoint, key, operation, format_name, date, *, page=1, rows=10,
 
 
 def redact(report, key):
-    # Defense in depth if the service ever echoes a key in its error message.
-    text = json.dumps(report, ensure_ascii=False, indent=2)
-    for value in sorted({key, unquote(key), urlencode({'serviceKey': unquote(key)}).split('=', 1)[1]}, key=len, reverse=True):
-        if value:
-            text = text.replace(value, '[REDACTED]')
-    return text
+    return redact_text(json.dumps(report, ensure_ascii=False, indent=2), key)
 
 
 def main():

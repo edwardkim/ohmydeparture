@@ -2,7 +2,8 @@
 
 An English-first, read-only Codex session and agent board using a split-flap display.
 Airport and railway boards are also available. ICN uses a dated provider snapshot;
-other travel timetables are generated examples.
+NRT can read an explicitly installed private Aviationstack cache. Other travel
+timetables, including NRT without a local cache, are generated examples.
 
 ## Install
 
@@ -79,13 +80,18 @@ The snapshot does not refresh automatically. An old day displays `REFRESH REQUIR
 with empty rows. During its day, the visible window follows the system clock:
 changed time (or scheduled time if absent) at or after 30 minutes ago, including
 all later flights that fit the board. This filters existing data without API calls.
+NRT can show a partial Aviationstack page from the user's local data directory.
+In a source checkout, run `python3 tools/check-aviationstack-api.py --airport NRT --install`
+and restart the app. A matching cached response needs no further API request.
+The footer identifies partial coverage, fetch time and reported-time preview.
 Other airport and railway boards use generated timetables.
 
 Downloading or refreshing ICN flight data requires **each user** to register at
 [data.go.kr](https://www.data.go.kr/), apply for
 [Detailed Flight Operation Status Inquiry](https://www.data.go.kr/data/15140153/openapi.do),
 receive approval, and obtain their own service key. No shared key is included.
-See the [source setup guide](https://github.com/edwardkim/ohmydeparture#icn-live-data-api-prerequisites).
+See the [real data integration guide](https://github.com/edwardkim/ohmydeparture/blob/main/docs/REAL_DATA_GUIDE.md)
+for ICN and NRT setup, update steps and troubleshooting.
 Viewing the bundled snapshot requires no key. From a source checkout, run
 `python3 tools/fetch-icn-departures.py`, rebuild with `make package-omarchy`, and
 run the new installer to update the embedded data. Restart an already running app

@@ -8,7 +8,7 @@ and tool history. Built on the renderer from
 [rainygirl's R Departures](https://github.com/rainygirl/renkuos-rdeparture).
 
 [한국어](README.ko.md) · [Install bundle](packaging/omarchy/README.md) ·
-[Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
+[Real data guide](docs/REAL_DATA_GUIDE.md) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
 
 ![Synthetic Codex session board](docs/codex-board.png)
 
@@ -151,8 +151,9 @@ before sharing. The public demo never reads personal histories.
 
 Available codes: `ICN`, `NRT`, `HKG`, `LHR`, `CDG`, `MXP`, `JFK`, `SFO`, `TOKYO`,
 `SEOUL`, `VICTORIA`, `SYDNEY`. They retain the original airport/station languages
-and cycling displays. **ICN uses a downloaded daily departure snapshot; the other
-airport and railway timetables are generated examples.**
+and cycling displays. **ICN uses a downloaded daily departure snapshot. NRT uses
+a private Aviationstack cache when explicitly installed; other timetables,
+including NRT without that cache, are generated examples.**
 
 The ICN board starts in English and cycles through Korean and an English fallback
 for the destination-language phase. It displays operating passenger flights from
@@ -218,6 +219,54 @@ an already running instance keeps its existing data. For an installed Omarchy
 bundle, rebuild with `make package-omarchy` and run the new bundle's installer.
 See [data/README.md](data/README.md#icn-daily-departures) for the snapshot format.
 
+## Aviationstack connection check
+
+For a common offline inspection and activation workflow, use
+`python3 tools/flight-data.py --help`. The
+[integration guide](docs/REAL_DATA_GUIDE.md) covers its `providers`, `status`,
+`validate`, `fetch` and `install` commands; [provider architecture](docs/DATA_PROVIDERS.md)
+explains extension points. Existing commands below remain available.
+
+Add your own `AVIATIONSTACK_KEY` to the local `.env` (see
+[.env.example](.env.example)). The current [Free plan](https://aviationstack.com/pricing)
+includes **100 requests per month**, HTTPS and non-commercial use. The source
+checkout provides a single-page diagnostic:
+
+```sh
+python3 tools/check-aviationstack-api.py --airport NRT
+```
+
+The first run makes **one HTTPS request** and keeps its credential-redacted
+response in `test-output/aviationstack-nrt-check.json` with owner-only permissions.
+Subsequent runs reuse that cache, even if old, and print its fetch time and
+**API calls this run: 0**. Use `--refresh` to explicitly make one new request.
+There are no automatic retries, pagination, scheduled refreshes or build-time
+API calls. A failed refresh preserves the existing cache. `--offset 100` checks
+the next page in a separate cache file; each fetched page is another request.
+
+The 2026-10-27 NRT check returned **100 of 1,418 matching records**, including
+50 codeshares; fetching that query in full would take **15 requests** at the
+Free plan's 100-record page size. A partial page is labelled `partial: true`.
+It is a partial live-feed page, not a complete passenger departure-day snapshot.
+To replace this user's generated NRT board with the already downloaded page:
+
+```sh
+python3 tools/check-aviationstack-api.py --airport NRT --install
+./ohmydeparture --airport NRT --windowed
+```
+
+Restart an already running app after installing or replacing the cache. The
+installed file is `~/.local/share/ohmydeparture/aviationstack/nrt.json`
+(`$XDG_DATA_HOME` is respected). `--install` reuses a matching cache with zero
+API calls. The board excludes codeshares, includes cargo, sorts the remaining
+flights and applies the current-time-minus-30-minutes window. It cycles English,
+Japanese and Korean, leaving missing gates blank and retaining provider statuses.
+The footer shows partial coverage, fetch time and **REPORTED TIMES**: this
+preview preserves the provider's clock values rather than silently adding nine
+hours to its ambiguous `+00:00` timestamps. A stale or invalid installed cache
+shows an explicit notice. Real responses and keys stay outside public bundles.
+See [data notes](data/README.md#aviationstack-local-diagnostic) for the time basis.
+
 ## Static airport code reference
 
 [data/airport-codes.json](data/airport-codes.json) contains all **1,391 airport
@@ -231,7 +280,7 @@ Join ICN flight `airportCode` to reference `cityCode`, using `cityEnglish` for
 the default English board or `cityKorean` for Korean. All 137 distinct airport
 codes in the 2,244 ICN departure/arrival records checked for 2026-10-26 matched.
 Provider fields `cityJapan` and `cityChina` can contain English text.
-The ICN snapshot board uses these names; other travel boards retain their generated data.
+The ICN snapshot and optional NRT cached board use these destination names.
 
 [data/airport-details.json](data/airport-details.json) additionally contains
 **5,498 airport records** from the supplied `IATA_20251231.csv`, provided by

@@ -1,5 +1,9 @@
 # Static airport code reference
 
+For account setup, downloads and applying data to an installed board, see the
+[real data integration guide](../docs/REAL_DATA_GUIDE.md)
+([한국어](../docs/REAL_DATA_GUIDE.ko.md)).
+
 [`airport-codes.json`](airport-codes.json) is a checked-in snapshot of all 1,391
 records returned by Korea Airports Corporation's **Airport Code Information_GW**
 service on **2026-10-26**. Application builds and installations include this file
@@ -105,8 +109,7 @@ For another file, pass its path as the first argument and optionally specify
 JSON. The bundled CSV retains its known provider when regenerated; other input
 files require their own provider attribution. Review the quality report and
 preserve the corresponding source CSV when updating the catalog. Both catalogs
-are offline references used by the ICN board; other travel boards continue to use
-their generated timetables.
+are offline references used by the ICN board and optional local NRT preview.
 
 ## ICN daily departures
 
@@ -179,3 +182,72 @@ with the replacement snapshot. Keep credentials and request URLs containing
 keys out of the repository. Review the data diff and source terms before
 publishing an update. Builds and normal application use must remain offline
 for this reference.
+
+## Aviationstack local diagnostic
+
+`tools/check-aviationstack-api.py` reads `AVIATIONSTACK_KEY` as plain data from
+the local `.env`, or from the process environment. It requests
+`https://api.aviationstack.com/v1/flights` using `access_key`, `dep_iata`, `limit`
+and `offset`. The key stays out of the stored query, logs and repository.
+Responses are stored under ignored `test-output/`, with owner-only permissions.
+`--install` copies a validated NRT page to the user's
+`$XDG_DATA_HOME/ohmydeparture/aviationstack/nrt.json` (default
+`~/.local/share/ohmydeparture/aviationstack/nrt.json`). The application reads this
+explicitly activated local copy; real responses are not embedded in public bundles.
+
+The current [pricing](https://aviationstack.com/pricing) lists 100 requests/month,
+HTTPS and non-commercial use for Free. The provider's
+[OpenAPI specification](https://api.swaggerhub.com/apis/apilayer-863/AviationstackAPI/1.0.0/swagger.json)
+limits pages below Professional to 100 records. One fetched page costs one
+request; a cache read costs none. The checker deliberately makes at most one
+request per invocation and requires `--refresh` to replace a matching cache.
+It never silently refreshes an old or mismatched cache. Failures preserve it.
+
+The first NRT probe on **2026-10-27** used one HTTPS request, returned HTTP 200,
+and reported `count=100`, `offset=0`, `total=1418`. All 100 returned records had
+`flight_date=2026-10-27`, but the dates and contents of the other pages have not
+been checked. Fifty records contained `flight.codeshared`. Both scheduled and
+estimated departure times were present in all 100; terminal in 94, gate in 81,
+and actual departure in one. The statuses present were `scheduled` and `active`.
+
+Fetching that matching query in full would require 15 requests at limit 100.
+Repeating a 15-page fetch daily for 30 days would use 450 requests. A single
+page per day would use 30, but would remain partial. Counts can change between
+requests; the local checker does not claim to know the account's remaining
+quota or calls made by other clients.
+
+NRT cached-board mapping:
+
+| Board field | Provider field | Handling needed |
+| --- | --- | --- |
+| Time | `departure.scheduled` | Preview reported clock values; see time basis below |
+| Expected | `departure.estimated` | Nullable; retain actual values |
+| Destination | `arrival.iata`, `arrival.airport` | Join the static code reference for translations |
+| Airline | `airline.iata`, `airline.name` | Existing airline colours or a stable fallback |
+| Flight | `flight.iata`, `flight.icao` | Prefer a full flight identifier |
+| Gate | `departure.gate` | Missing values stay blank |
+| Remarks | `flight_status` | Coarse statuses; no inferred boarding/closing times |
+
+The response also includes cargo airlines, with no equivalent of ICN's explicit
+`passengerOrCargo` field. Absence of `flight.codeshared` alone does not establish
+that a record is a passenger flight. The installed board keeps cargo, omits
+codeshare records and duplicate flight/time pairs, and labels partial coverage.
+
+The sampled departure timestamps carry `+00:00` while the airport timezone is
+`Asia/Tokyo`. The local preview explicitly declares
+`display_time_basis=reported_wall_time`: source date/time components are shown
+unchanged, associated with the departure airport for the rolling display window.
+Original timestamp strings and offsets remain in the response. This is a
+reported-time preview, not a verified UTC interpretation; **REPORTED TIMES**
+is visible in the footer. No inferred boarding/closing times or gates are added.
+The board shows the locally fetched day only, and filters out effective times
+earlier than the current airport time minus 30 minutes. It displays stale or
+invalid-cache notices rather than substituting generated flights. If no cache
+has been installed, the original generated NRT board remains available.
+Restart the app after activating or replacing a cache. This operation reads
+local data only and does not spend an API request when a matching cache exists.
+
+The checker omits `flight_date`: the provider's
+[plan reference](https://docs.apilayer.com/apilayer/docs/aviationstack)
+places that filter and historical/future schedules on paid plans. The installed
+board validates and filters the returned records locally for the fetched day.

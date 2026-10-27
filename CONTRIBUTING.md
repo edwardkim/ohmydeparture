@@ -6,6 +6,12 @@ text unchanged, including non-Latin text.
 
 ## Build and checks
 
+Flight data adapters implement the common provider interface and register with
+`DepartureSources`; the renderer has no airport-specific API branches. See
+[provider architecture](docs/DATA_PROVIDERS.md) and the
+[real data guide](docs/REAL_DATA_GUIDE.md). `make test-data` exercises registration,
+headless validation, request limits, staging and atomic activation without live API calls.
+
 Use C++17, Qt 6 Widgets/Network/Test, make, pkg-config, Python 3 and binutils.
 Native GUI checks also require Xvfb, xauth, xdotool, ImageMagick and CJK fonts.
 On Omarchy, the installed Quickshell/Omarchy shell enables the optional widget test.

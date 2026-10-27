@@ -3,10 +3,9 @@
 import argparse
 from datetime import datetime
 import importlib.util
-import os
 from pathlib import Path
-import tempfile
 from zoneinfo import ZoneInfo
+from flightdata.common import atomic_write
 
 ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location('icn_api', ROOT / 'tools/check-icn-api.py')
@@ -70,22 +69,13 @@ def main():
     args = parser.parse_args()
     if args.rows < 1 or args.rows > 1000:
         parser.error('--rows must be between 1 and 1000')
-    temporary = None
     try:
         date = datetime.strptime(args.date, '%Y%m%d').strftime('%Y%m%d')
         values, endpoint = api.load_config(args.env)
         snapshot = collect(endpoint, values['ICN_KEY'], date, args.rows)
         text = api.redact(snapshot, values['ICN_KEY']) + '\n'
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=args.output.parent,
-                                         prefix='.icn-', suffix='.tmp', delete=False) as stream:
-            temporary = Path(stream.name)
-            stream.write(text)
-        temporary.chmod(0o644)
-        os.replace(temporary, args.output)
+        atomic_write(args.output, text, mode=0o644, prefix='.icn-')
     except (OSError, ValueError, KeyError, TypeError):
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
         print('Download failed: check the ICN configuration, date and API response; credentials are not logged.')
         return 1
     operating = sum(item.get('codeshare') == 'Master' and item.get('passengerOrCargo') == 'Passenger'

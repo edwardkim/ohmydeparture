@@ -37,6 +37,8 @@ int main(int argc, char** argv)
     app.setApplicationName("OhMyDeparture");
     QTemporaryDir settingsDir;
     check(settingsDir.isValid(), "temporary settings directory");
+    // The generated-airport checks must not depend on this user's NRT cache.
+    qputenv("XDG_DATA_HOME", settingsDir.path().toUtf8());
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
     check(QFontDatabase::addApplicationFont(":/fonts/D-DINCondensed-Bold.otf") >= 0, "bundled DIN board font");

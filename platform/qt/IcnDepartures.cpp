@@ -1,13 +1,13 @@
 #include "IcnDepartures.h"
+#include "DepartureSupport.h"
 #include <QFile>
-#include <QHash>
+#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSet>
 #include <QTimeZone>
-#include <algorithm>
 
 namespace {
 const QTimeZone seoul("Asia/Seoul");
@@ -19,28 +19,6 @@ QDateTime timestamp(const QString& value) {
     return value.size() == 12 && result.isValid() && result.toString("yyyyMMddHHmm") == value
         ? result : QDateTime();
 }
-
-QJsonObject resource(const char* path) {
-    QFile file(QString::fromLatin1(path));
-    return file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object() : QJsonObject();
-}
-
-struct Names {
-    QHash<QString, QJsonObject> cities, airports;
-    Names() {
-        for (const auto& value : resource(":/data/airport-codes.json")["items"].toArray()) {
-            const auto item = value.toObject(); cities.insert(item["cityCode"].toString(), item);
-        }
-        QSet<QString> ambiguous;
-        for (const auto& value : resource(":/data/airport-details.json")["items"].toArray()) {
-            const auto item = value.toObject(); const auto code = item["iataCode"].toString();
-            if (code.isEmpty()) continue;
-            if (airports.contains(code)) ambiguous.insert(code);
-            airports.insert(code, item);
-        }
-        for (const auto& code : ambiguous) airports.remove(code);
-    }
-};
 
 void describeRemark(IcnDeparture& flight, const QString& remark) {
     flight.remarkKorean = remark.isEmpty() ? QStringLiteral("예정") : remark;
@@ -61,13 +39,13 @@ void describeRemark(IcnDeparture& flight, const QString& remark) {
 bool IcnDepartures::load(const QString& path) {
     QFile file(path);
     if (file.open(QIODevice::ReadOnly) && file.size() <= 16 * 1024 * 1024) return loadData(file.readAll());
-    flights_.clear(); date_ = QDate(); fetched_ = QDateTime(); recordCount_ = 0;
+    sha256_.clear(); flights_.clear(); date_ = QDate(); fetched_ = QDateTime(); recordCount_ = 0;
     error_ = "ICN snapshot could not be read";
     return false;
 }
 
 bool IcnDepartures::loadData(const QByteArray& data) {
-    flights_.clear(); date_ = QDate(); fetched_ = QDateTime(); recordCount_ = 0;
+    sha256_.clear(); flights_.clear(); date_ = QDate(); fetched_ = QDateTime(); recordCount_ = 0;
     error_ = "Invalid or incomplete ICN snapshot";
     const auto document = QJsonDocument::fromJson(data);
     const auto root = document.object();
@@ -78,7 +56,6 @@ bool IcnDepartures::loadData(const QByteArray& data) {
         || root["direction"] != "departures" || root["timezone"] != "Asia/Seoul"
         || !date.isValid() || !fetched.isValid() || !root["items"].isArray()
         || root["record_count"].toInt(-1) != items.size()) return false;
-    static const Names names;
     static const QRegularExpression flightNumber("^([A-Z0-9]{2}|[A-Z]{3})\\s*[0-9]+[A-Z]?$");
     QSet<QString> identifiers;
     QList<IcnDeparture> flights;
@@ -100,41 +77,38 @@ bool IcnDepartures::loadData(const QByteArray& data) {
         flight.estimated = timestamp(estimate);
         if (!estimate.isEmpty() && !flight.estimated.isValid()) return false;
         flight.gate = item["gateNumber"].toString();
-        const auto city = names.cities.value(flight.airportCode);
-        const auto airport = names.airports.value(flight.airportCode);
-        flight.destinationEnglish = city["cityEnglish"].toString();
-        if (flight.destinationEnglish.isEmpty()) flight.destinationEnglish = airport["nameEnglish"].toString();
-        if (flight.destinationEnglish.isEmpty()) flight.destinationEnglish = flight.airportCode;
-        flight.destinationKorean = city["cityKorean"].toString();
-        if (flight.destinationKorean.isEmpty()) flight.destinationKorean = airport["nameKorean"].toString();
+        const auto names = airportNames(flight.airportCode);
+        flight.destinationEnglish = names.english.isEmpty() ? flight.airportCode : names.english;
+        flight.destinationKorean = names.korean;
         if (flight.destinationKorean.isEmpty()) flight.destinationKorean = item["airport"].toString();
         if (flight.destinationKorean.isEmpty()) flight.destinationKorean = flight.airportCode;
         describeRemark(flight, item["remark"].toString());
         flights.append(flight);
     }
-    std::sort(flights.begin(), flights.end(), [](const auto& a, const auto& b) {
-        return a.scheduled == b.scheduled ? a.flightId < b.flightId : a.scheduled < b.scheduled;
-    });
+    sortDepartures(flights);
     flights_ = flights; date_ = date; fetched_ = fetched; recordCount_ = items.size(); error_.clear();
+    sha256_=QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha256).toHex());
     return true;
 }
 
 QList<IcnDeparture> IcnDepartures::visibleRows(const QDateTime& now, int limit) const {
-    QList<IcnDeparture> result;
-    if (!error_.isEmpty() || now.toTimeZone(seoul).date() != date_ || limit <= 0) return result;
-    const auto cutoff = now.addSecs(-30 * 60);
-    for (const auto& flight : flights_) {
-        const auto effective = flight.estimated.isValid() ? flight.estimated : flight.scheduled;
-        if (effective < cutoff) continue;
-        result.append(flight);
-        if (result.size() == limit) break;
-    }
-    return result;
+    return error_.isEmpty() ? departureWindow(flights_,date_,seoul,now,limit) : QList<Departure>();
 }
 
-QString IcnDepartures::notice(const QDateTime& now) const {
+QString IcnDepartures::notice(const QDateTime& now, bool empty) const {
     if (!error_.isEmpty() || !date_.isValid()) return "ICN DATA UNAVAILABLE";
     if (now.toTimeZone(seoul).date() != date_)
         return "ICN DATA " + date_.toString(Qt::ISODate) + " / REFRESH REQUIRED";
-    return "ICN SNAPSHOT " + fetched_.toTimeZone(seoul).toString("yyyy-MM-dd HH:mm") + " KST";
+    return "ICN SNAPSHOT " + fetched_.toTimeZone(seoul).toString("yyyy-MM-dd HH:mm") + " KST" + (empty ? " / NO MORE DEPARTURES" : "");
+}
+
+DepartureProviderInfo IcnDepartures::info() const {
+    DepartureProviderInfo result;
+    result.provider="icn";result.airport="ICN";result.storage="embedded";
+    result.path=":/data/icn-departures.json";result.timeBasis="airport_local";result.timezone=seoul;
+    result.languages={"en","ko","en"};result.date=date_;result.fetched=fetched_;
+    result.records=result.total=recordCount_;result.displayed=flights_.size();
+    result.valid=error_.isEmpty() && date_.isValid();result.error=error_;
+    result.sha256=sha256_;
+    return result;
 }

@@ -4,6 +4,11 @@ Codex 세션과 에이전트 기록을 공항의 플랩 출발표처럼 보여�
 프로젝트의 기본 문서와 UI 언어는 **영문**입니다. 사용자 세션의 제목과 내용은 원문 그대로
 표시합니다. 전체 설명은 [English README](README.md)를 참고하세요.
 
+[실데이터 연동 가이드](docs/REAL_DATA_GUIDE.ko.md)에서 키 발급, 데이터 수집·적용,
+플러그인 갱신과 문제 해결 절차를 확인할 수 있습니다.
+공통 도구 `python3 tools/flight-data.py --help`는 제공자 목록·상태·검증·수집·설치를
+지원합니다. 확장 구조는 [제공자 개발 안내](docs/DATA_PROVIDERS.md)를 참고하세요.
+
 ![가상 세션 전광판](docs/codex-board.png)
 
 ## 실행
@@ -44,7 +49,8 @@ HISTORY는 현재 실행 상태를 모르는 저장 기록, IDLE은 현재 활�
 없으면 로컬 JSONL 기록을 읽습니다. 에이전트 실행·재개·중단·승인, 명령 실행,
 Codex 설정·DB·hook 변경은 하지 않습니다. 스크린샷은 개인정보를 확인한 뒤 공유하세요.
 이 문서의 Codex 화면은 가상 데이터입니다. ICN은 내려받은 당일 실제 출발 정보를,
-다른 공항·철도 화면은 생성 시간표를 사용합니다.
+나리타는 로컬 aviationstack 캐시를 설치하면 실데이터 미리보기를 표시하며,
+캐시가 없을 때와 다른 공항·철도 화면은 생성 시간표를 사용합니다.
 
 ## 인천공항 실데이터 API 이용 조건
 
@@ -109,7 +115,7 @@ make -j2
 화면에는 `cityEnglish`, 한국어 화면에는 `cityKorean`을 사용할 수 있습니다.
 2026-10-26 출발·도착 2,244건에 등장한 공항 코드 137개가 모두 일치했습니다.
 `cityJapan`, `cityChina`에도 영어가 들어올 수 있습니다. ICN 실데이터 전광판에서
-이 정적 목록으로 목적지 이름을 연결하며, 다른 공항·철도 화면은 생성 시간표를 유지합니다.
+이 정적 목록으로 ICN·나리타 캐시 화면의 목적지 이름을 연결합니다.
 
 추가로 [data/airport-details.json](data/airport-details.json)에 제공된
 **대한민국 국토교통부**가 제공한 `IATA_20251231.csv`의 **공항 5,498건**을
@@ -123,6 +129,27 @@ make -j2
 목록을 갱신하는 관리자만 해당 API 활용신청·승인과 인증키가 필요하며,
 선택 설정인 `ACODE_EP`·`ACODE_KEY`는 [.env.example](.env.example)을 참고합니다.
 인천공항 실시간 운항 API의 이용 조건은 위 설명을 따릅니다.
+
+aviationstack 무료 API 확인용으로 `.env`에 `AVIATIONSTACK_KEY`를 설정하고
+`python3 tools/check-aviationstack-api.py --airport NRT`를 실행할 수 있습니다.
+첫 실행은 HTTPS 요청 1회, 이후에는 로컬 캐시를 재사용합니다. 새로 조회할 때만
+`--refresh`를 붙입니다. 자동 재시도나 페이지 전체 수집은 하지 않습니다.
+무료 플랜은 월 100회이며 페이지마다 요청을 사용합니다. 2026-10-27 나리타는
+총 1,418건 중 첫 100건이 반환되어 전체 조회에는 15회가 필요합니다.
+받아 둔 데이터로 나리타 화면을 교체하려면 다음을 실행하고 앱을 다시 시작합니다.
+
+```sh
+python3 tools/check-aviationstack-api.py --airport NRT --install
+./ohmydeparture --airport NRT --windowed
+```
+
+캐시가 있으면 추가 API 호출은 0회입니다. 코드셰어를 제외하고 화물편은 포함하며,
+현재 시각 30분 전부터의 항목을 시간순으로 표시합니다. 누락된 게이트는 빈칸으로
+두고, 하단에 부분 데이터와 조회 시각을 표시합니다. 시각은 원본 반환값을 그대로
+보여주는 **REPORTED TIMES** 미리보기이며, UTC 표기를 근거로 9시간을 더하지 않습니다.
+영문·일문·한글로 전환합니다. 실제 응답은 사용자 로컬 데이터 디렉터리에 보관합니다.
+[영문 사용 안내](README.md#aviationstack-connection-check)와
+[필드·제약 사항](data/README.md#aviationstack-local-diagnostic)을 참고하세요.
 
 원작은 [rainygirl/R Departures](https://github.com/rainygirl/renkuos-rdeparture)입니다.
 영문 보드는 전통 공항 출발표 느낌의 D-DIN Condensed Bold를 사용하며,

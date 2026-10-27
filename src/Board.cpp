@@ -1105,7 +1105,7 @@ void BoardView::_SetFlightAirline(int index, const QString& code, const QString&
     const QString identity = code.isEmpty() ? name : code;
     const QString label = code.isEmpty() ? name : code;
     Field& field = fFields[index];
-    BString text; text << "ICN-AIRLINE|" << identity.toUtf8().constData();
+    BString text; text << "FLIGHT-AIRLINE|" << identity.toUtf8().constData();
     if (field.text == text) {
         Cell& cell = fCells[field.first];
         if (replay && !identity.isEmpty() && !cell.flipping && cell.queued == 0)
@@ -1121,13 +1121,14 @@ void BoardView::_SetFlightAirline(int index, const QString& code, const QString&
     _Enqueue(fCells[field.first], face, NULL, 0, system_time() + delay);
 }
 
-void BoardView::_UpdateIcn(bool phaseChanged)
+void BoardView::_UpdateProviderDepartures(DepartureProvider& source, bool phaseChanged)
 {
-    if (!fIcnLoaded) { fIcnDepartures.load(); fIcnLoaded = true; }
-    const QDateTime now = QDateTime::fromSecsSinceEpoch(time(NULL) + gTimeOffset).toTimeZone(QTimeZone("Asia/Seoul"));
+    const auto metadata = source.info();
+    const QDateTime now = QDateTime::fromSecsSinceEpoch(time(NULL) + gTimeOffset)
+        .toTimeZone(metadata.timezone);
     const int lang = _PhaseLang();
     const bool korean = lang == LANG_KO;
-    const int titleLang = korean ? LANG_KO : LANG_EN;
+    const int titleLang = lang == LANG_DEST ? LANG_EN : lang;
     const int64 local = airport_local_minutes(kAirports[fAirport], time(NULL) + gTimeOffset);
     char buffer[64];
     format_date(buffer, sizeof(buffer), local, titleLang);
@@ -1135,10 +1136,8 @@ void BoardView::_UpdateIcn(bool phaseChanged)
     snprintf(buffer, sizeof(buffer), "%02d:%02d", int(local % 1440 / 60), int(local % 60));
     _SetField(fClockField, buffer, COLOR_YELLOW, 0);
     _SetField(fTitleField, title_text(titleLang), COLOR_WHITE, 0);
-    const auto rows = fIcnDepartures.visibleRows(now, fRows);
-    QString notice = fIcnDepartures.notice(now);
-    if (rows.isEmpty() && fIcnDepartures.error().isEmpty() && fIcnDepartures.date() == now.date())
-        notice += " / NO MORE DEPARTURES";
+    const auto rows = source.visibleRows(now, fRows);
+    const auto notice = source.notice(now, rows.isEmpty());
     _SetField(fFooterField, notice.toUtf8().constData(), COLOR_YELLOW, phaseChanged ? 300000 : 0);
     for (int row = 0; row < fRows; ++row) {
         const int first = fRowFields + row * COL_COUNT;
@@ -1157,6 +1156,7 @@ void BoardView::_UpdateIcn(bool phaseChanged)
         _SetField(first + COL_TIME, scheduled.toUtf8().constData(), COLOR_YELLOW, delay);
         _SetField(first + COL_NEW, changed.toUtf8().constData(), COLOR_ORANGE, delay);
         auto destination = korean ? flight.destinationKorean : flight.destinationEnglish;
+        if (lang == LANG_JA && !flight.destinationJapanese.isEmpty()) destination = flight.destinationJapanese;
         int destinationCells = 0;
         for (const auto codepoint : destination.toUcs4()) destinationCells += is_wide(codepoint) ? 2 : 1;
         if (destinationCells > fFields[first + COL_DEST].count && destination.contains('/'))
@@ -1165,11 +1165,12 @@ void BoardView::_UpdateIcn(bool phaseChanged)
         _SetFlightAirline(first + COL_AIRLINE, flight.airlineCode, flight.airlineName, delay, phaseChanged);
         _SetField(first + COL_FLIGHT, flight.flightId.toUtf8().constData(), COLOR_WHITE, delay);
         _SetField(first + COL_GATE, flight.gate.toUtf8().constData(), COLOR_WHITE, delay);
-        const int color = flight.tone == IcnDeparture::Muted ? COLOR_GRAY
-            : flight.tone == IcnDeparture::Attention ? COLOR_ORANGE
-            : flight.tone == IcnDeparture::Boarding ? COLOR_YELLOW
-            : flight.tone == IcnDeparture::Error ? COLOR_RED : COLOR_WHITE;
-        const auto remark = korean ? flight.remarkKorean : flight.remarkEnglish;
+        const int color = flight.tone == Departure::Muted ? COLOR_GRAY
+            : flight.tone == Departure::Attention ? COLOR_ORANGE
+            : flight.tone == Departure::Boarding ? COLOR_YELLOW
+            : flight.tone == Departure::Error ? COLOR_RED : COLOR_WHITE;
+        auto remark = korean ? flight.remarkKorean : flight.remarkEnglish;
+        if (lang == LANG_JA && !flight.remarkJapanese.isEmpty()) remark = flight.remarkJapanese;
         _SetField(first + COL_REMARKS, remark.toUtf8().constData(), color, delay);
     }
 }
@@ -1578,6 +1579,15 @@ BoardView::_PhaseLang() const
 {
 	const Airport& airport = kAirports[fAirport];
 	int phase = fFixedPhase >= 0 ? fFixedPhase % airport.phaseCount : fPhase;
+#ifdef RDEPARTURES_QT
+    if (const auto* source = fDepartureSources.current(QString::fromLatin1(airport.code))) {
+        const auto languages = source->info().languages;
+        if (!languages.isEmpty()) {
+            const auto language = languages[phase % languages.size()];
+            return language == "ko" ? LANG_KO : language == "ja" ? LANG_JA : LANG_EN;
+        }
+    }
+#endif
 	return airport.phases[phase];
 }
 
@@ -1613,7 +1623,9 @@ BoardView::_UpdateContent(bool phaseChanged)
 #endif
 	fLastUpdate = system_time();
 #ifdef RDEPARTURES_QT
-    if (fAirport == 0) { _UpdateIcn(phaseChanged); return; }
+    if (auto* source = fDepartureSources.source(QString::fromLatin1(kAirports[fAirport].code))) {
+        _UpdateProviderDepartures(*source, phaseChanged); return;
+    }
 #endif
 	const Airport& airport = kAirports[fAirport];
 	int64 now = airport_local_minutes(airport, time(NULL) + gTimeOffset);

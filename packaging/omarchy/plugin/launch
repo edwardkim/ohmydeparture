@@ -6,7 +6,7 @@ renderer="$plugin_dir/bin/ohmydeparture"
 # Rendering / CLI operations remain independent of any interactive window.
 for arg in "$@"; do
   case "$arg" in
-    --snapshot|--snapshot=*|--help|-h|--version|-v) exec "$renderer" "$@" ;;
+    --snapshot|--snapshot=*|--data-status|--data-providers|--help|-h|--version|-v) exec "$renderer" "$@" ;;
   esac
 done
 

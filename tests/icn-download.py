@@ -6,10 +6,12 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'tools'))
 spec = importlib.util.spec_from_file_location('download_icn', ROOT / 'tools/fetch-icn-departures.py')
 downloader = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(downloader)

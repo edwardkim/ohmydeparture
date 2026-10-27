@@ -7,7 +7,7 @@
 
 #ifdef RDEPARTURES_QT
 #include "HaikuCompat.h"
-#include "IcnDepartures.h"
+#include "DepartureSources.h"
 #include <QJsonArray>
 #include <QJsonObject>
 #include <functional>
@@ -126,15 +126,14 @@ private:
 #ifdef RDEPARTURES_QT
     void _UpdateCodex();
     void _UpdateCodexHistory();
-    void _UpdateIcn(bool phaseChanged);
+    void _UpdateProviderDepartures(DepartureProvider& source, bool phaseChanged);
     void _SetFlightAirline(int field, const QString& code, const QString& name, bigtime_t delay, bool replay = false);
     void _FlipCodexRows(bigtime_t now);
     BBitmap* _ProjectFace(const QString& project, const QString& path);
     void _SetProject(int field, const QString& project, const QString& path, bigtime_t delay);
     bool fCodexMode = false;
     bool fCodexHistoryMode = false;
-    bool fIcnLoaded = false;
-    IcnDepartures fIcnDepartures;
+    DepartureSources fDepartureSources;
     int fCodexPage = 0;
     int fCodexFlipInterval = 3;
     int fCodexFlipDurationMs = 650;

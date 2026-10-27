@@ -46,3 +46,8 @@ The source portal lists its usage terms as **이용허락범위 제한 없음** 
 on use), checked on 2026-10-26. The JSON retains the original returned records
 and their query/fetch metadata. Board translations and row selection are display
 transformations. Service keys are excluded from the snapshot and package.
+
+The optional NRT board reads the user's private Aviationstack response cache.
+Users supply their own account/key and retain the provider's applicable plan
+and data-use terms. Real Aviationstack responses and service keys are not
+included in source releases or the distributable plugin.

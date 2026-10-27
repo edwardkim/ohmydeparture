@@ -1,4 +1,4 @@
-/* Linux entry point. ICN uses a provider snapshot; other travel boards share Haiku's generated data. */
+/* Linux entry point. ICN uses a snapshot; NRT can read a private Aviationstack cache. */
 #include "Board.h"
 #include "Branding.h"
 #include "Station.h"
@@ -15,6 +15,9 @@
 #include <QThread>
 #include <QEventLoop>
 #include <QTimer>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QFileInfo>
 
 #include <cstdio>
 #include <limits>
@@ -53,6 +56,7 @@ int main(int argc, char** argv)
     for (int i = 1; i < argc; ++i) {
         const QString arg = QString::fromLocal8Bit(argv[i]);
         if (arg == "--snapshot" || arg.startsWith("--snapshot=")
+            || arg == "--data-status" || arg == "--data-providers"
             || arg == "--help" || arg == "-h" || arg == "--version" || arg == "-v") {
             qputenv("QT_QPA_PLATFORM", "offscreen");
             qputenv("QT_QPA_PLATFORMTHEME", "");
@@ -72,7 +76,8 @@ int main(int argc, char** argv)
 
     QCommandLineParser parser;
     parser.setApplicationDescription("Departure boards and read-only Codex session monitoring for Linux / Omarchy.\n"
-        "ICN uses a dated provider snapshot; other travel timetables are generated.\n"
+        "ICN uses a dated snapshot; NRT can use a local Aviationstack preview.\n"
+        "Other travel timetables are generated.\n"
         "Departures: Esc/Q quits, arrows/Space changes board. Codex: Esc quits.\n"
         "F11: toggle full screen.");
     parser.addHelpOption();
@@ -86,8 +91,28 @@ int main(int argc, char** argv)
     parser.addOption({"phase", "Pin the language/station-board phase (zero based).", "index"});
     parser.addOption({"wait", "Snapshot animation time in seconds, between 0 and 60.", "seconds", "4"});
     parser.addOption({"offset", "Shift the timetable clock by this many minutes.", "minutes", "0"});
+    parser.addOption({"data-status", "Print provider validation/status JSON without opening a window."});
+    parser.addOption({"data-providers", "List registered departure providers as JSON without opening a window."});
+    parser.addOption({"data-file", "Validate this file instead of the active provider data (with --data-status).", "file"});
     parser.process(app);
     if (!parser.positionalArguments().isEmpty()) return fail("Unexpected positional argument. See --help.");
+    if (parser.isSet("data-file") && !parser.isSet("data-status")) return fail("--data-file requires --data-status.");
+    if (parser.isSet("data-status") || parser.isSet("data-providers")) {
+        DepartureSources sources;
+        const auto now=QDateTime::currentDateTime();
+        if (parser.isSet("data-providers")) {
+            std::printf("%s",QJsonDocument(sources.descriptions(now)).toJson().constData());return 0;
+        }
+        if (!parser.isSet("airport")) return fail("--data-status requires --airport.");
+        auto* source=sources.inspect(parser.value("airport").toUpper(),parser.value("data-file"));
+        if (!source) return fail("No departure data provider registered for this airport.");
+        auto status=source->info().toJson(now);
+        if (parser.isSet("data-file")) status["path"]=QFileInfo(parser.value("data-file")).absoluteFilePath();
+        status["visible_count"]=source->visibleRows(now,100000).size();
+        status["notice"]=source->notice(now,status["visible_count"].toInt()==0);
+        std::printf("%s",QJsonDocument(status).toJson().constData());
+        return source->info().valid?0:1;
+    }
     const auto view = !parser.isSet("view") && parser.isSet("airport") ? QString("departures") : parser.value("view");
     if (view != "departures" && view != "codex") return fail("Invalid --view. Use departures or codex.");
     if (parser.isSet("codex-fixture") && view != "codex") return fail("--codex-fixture requires --view codex.");

@@ -12,7 +12,10 @@ CPPFLAGS += -DOHMYDEPARTURE_VERSION=\"$(VERSION)\"
 PREFIX ?= $(HOME)/.local
 BUILD ?= .build/linux
 
-SOURCES := platform/qt/LinuxApp.cpp platform/qt/Branding.cpp platform/qt/HaikuCompat.cpp platform/qt/CodexBoard.cpp platform/qt/CodexHistory.cpp platform/qt/DesktopBoards.cpp platform/qt/IcnDepartures.cpp src/Board.cpp src/Data.cpp src/Station.cpp
+DATA_SOURCES := platform/qt/DepartureProvider.cpp platform/qt/DepartureSupport.cpp platform/qt/DepartureSources.cpp
+DATA_OBJECTS := $(DATA_SOURCES:%.cpp=$(BUILD)/%.o)
+
+SOURCES := platform/qt/LinuxApp.cpp platform/qt/Branding.cpp platform/qt/HaikuCompat.cpp platform/qt/CodexBoard.cpp platform/qt/CodexHistory.cpp platform/qt/DesktopBoards.cpp platform/qt/IcnDepartures.cpp platform/qt/AviationstackDepartures.cpp src/Board.cpp src/Data.cpp src/Station.cpp $(DATA_SOURCES)
 OBJECTS := $(SOURCES:%.cpp=$(BUILD)/%.o) $(BUILD)/qrc_assets.o
 
 all: $(APP) RDepartures
@@ -85,7 +88,7 @@ $(BUILD)/icn-departures-test.o: tests/icn-departures.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-$(BUILD)/icn-departures-test: $(BUILD)/icn-departures-test.o $(BUILD)/platform/qt/IcnDepartures.o $(BUILD)/qrc_assets.o
+$(BUILD)/icn-departures-test: $(BUILD)/icn-departures-test.o $(BUILD)/platform/qt/IcnDepartures.o $(BUILD)/platform/qt/DepartureSupport.o $(BUILD)/platform/qt/DepartureProvider.o $(BUILD)/qrc_assets.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 test-icn: $(BUILD)/icn-departures-test
@@ -100,7 +103,29 @@ test-codex: $(APP) $(BUILD)/codex-smoke $(BUILD)/codex-history-test $(BUILD)/../
 	python3 tests/codex-reader.py
 	env QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_IM_MODULE= $(BUILD)/codex-smoke
 
-test: $(APP) $(BUILD)/linux-smoke test-codex test-icn
+$(BUILD)/aviationstack-departures-test.o: tests/aviationstack-departures.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD)/aviationstack-departures-test: $(BUILD)/aviationstack-departures-test.o $(BUILD)/platform/qt/AviationstackDepartures.o $(BUILD)/platform/qt/DepartureSupport.o $(BUILD)/platform/qt/DepartureProvider.o $(BUILD)/qrc_assets.o
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test-aviationstack: $(BUILD)/aviationstack-departures-test
+	python3 tests/aviationstack-api.py
+	$(BUILD)/aviationstack-departures-test
+
+$(BUILD)/departure-sources-test.o: tests/departure-sources.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD)/departure-sources-test: $(BUILD)/departure-sources-test.o $(DATA_OBJECTS) $(BUILD)/platform/qt/IcnDepartures.o $(BUILD)/platform/qt/AviationstackDepartures.o $(BUILD)/qrc_assets.o
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test-data: $(APP) $(BUILD)/departure-sources-test
+	$(BUILD)/departure-sources-test
+	python3 tests/flight-data.py
+
+test: $(APP) $(BUILD)/linux-smoke test-codex test-icn test-aviationstack test-data
 	python3 tests/airport-data.py
 	env QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_IM_MODULE= $(BUILD)/linux-smoke
 	python3 tests/linux-cli.py
@@ -117,5 +142,7 @@ test-desktop: $(APP)
 -include $(OBJECTS:.o=.d)
 -include $(BUILD)/linux-smoke.d $(BUILD)/LinuxAppTest.d $(BUILD)/codex-smoke.d
 -include $(BUILD)/icn-departures-test.d
+-include $(BUILD)/aviationstack-departures-test.d
+-include $(BUILD)/departure-sources-test.d
 -include $(BUILD)/codex-history-test.d
-.PHONY: all check-deps install clean test test-codex test-icn test-desktop package-omarchy test-omarchy
+.PHONY: all check-deps install clean test test-codex test-icn test-aviationstack test-data test-desktop package-omarchy test-omarchy

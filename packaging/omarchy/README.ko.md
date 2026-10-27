@@ -33,12 +33,15 @@ ICN은 내려받은 실제 출발 정보와 KST 조회 시각을 표시합니다
 표시합니다. 해당일 데이터에서는 시스템 현재 시각의 30분 전부터 이후 운항편만
 표시합니다. 변경 시각이 있으면 변경 시각, 없으면 예정 시각을 기준으로 하며,
 화면 범위를 이동하는 과정에서 API를 다시 호출하지 않습니다.
-다른 공항·철도 화면은 생성 시간표입니다.
+나리타는 소스 작업본에서 `python3 tools/check-aviationstack-api.py --airport NRT --install`로
+개인 캐시를 활성화하면 실데이터 미리보기를 표시합니다. 앱을 다시 시작하세요.
+하단에 부분 데이터·조회 시각·원본 시각 미리보기를 표시합니다.
+캐시가 없는 나리타와 다른 공항·철도 화면은 생성 시간표입니다.
 
 ICN 운항정보를 직접 내려받거나 갱신하려면 **사용자마다** [공공데이터포털](https://www.data.go.kr/)
 회원가입 후 [인천국제공항공사_항공기 운항 현황 상세 조회](https://www.data.go.kr/data/15140153/openapi.do)
 활용신청·승인을 받고 본인 인증키를 발급받아야 합니다. 공용 키는 제공하지 않습니다.
-[소스 설정 안내](https://github.com/edwardkim/ohmydeparture#icn-live-data-api-prerequisites)를
+[실데이터 연동 가이드](https://github.com/edwardkim/ohmydeparture/blob/main/docs/REAL_DATA_GUIDE.ko.md)를
 참고하세요. 번들에 포함된 조회 결과를 보는 데에는 인증키가 필요하지 않습니다.
 소스 작업본에서 `python3 tools/fetch-icn-departures.py`와 `make package-omarchy`를
 실행하고 새 설치 프로그램으로 업데이트하세요. 실행 중인 앱은 다시 시작해야 하며,
