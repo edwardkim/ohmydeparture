@@ -34,7 +34,8 @@ def main():
     for filename in ('LICENSE', 'THIRD_PARTY_NOTICES.md'):
         shutil.copy2(ROOT / filename, plugin / filename)
     (plugin / 'licenses').mkdir()
-    shutil.copy2(ROOT / 'fonts/GUST-FONT-LICENSE.txt', plugin / 'licenses/GUST-FONT-LICENSE.txt')
+    for filename in ('GUST-FONT-LICENSE.txt', 'D-DIN-OFL-1.1.txt', 'D-DIN-FONTLOG.txt'):
+        shutil.copy2(ROOT / 'fonts' / filename, plugin / 'licenses' / filename)
     for filename in ('install.py', 'README.md', 'README.ko.md'):
         shutil.copy2(template / filename, bundle / filename)
     for filename in ('launch', 'bin/ohmydeparture'):

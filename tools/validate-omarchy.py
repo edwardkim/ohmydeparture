@@ -29,6 +29,7 @@ def validate(plugin, payload=True):
     files = [entry, 'launch']
     if payload:
         files += ['bin/ohmydeparture', 'libexec/codex-reader.py', 'icon.png', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses/GUST-FONT-LICENSE.txt']
+        files += ['licenses/D-DIN-OFL-1.1.txt', 'licenses/D-DIN-FONTLOG.txt']
     for name in files:
         path = plugin / name
         require(path.resolve().is_relative_to(plugin) and path.is_file(), f'Missing or unsafe file: {name}')

@@ -99,6 +99,7 @@ public:
     BFont();
     status_t SetFamilyAndStyle(const char* family, const char* style);
     void SetSize(float size);
+    void SetStretch(int percent) { font_.setStretch(percent); }
     float Size() const { return size_; }
     void SetFlags(uint32) { font_.setStyleStrategy(QFont::PreferAntialias); }
     void SetFace(uint32) {

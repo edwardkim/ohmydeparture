@@ -1,5 +1,7 @@
 # Preserve the upstream font license verbatim.
 fonts/GUST-FONT-LICENSE.txt -whitespace
+fonts/D-DIN-OFL-1.1.txt -whitespace
+fonts/D-DIN-FONTLOG.txt -whitespace
 *.png binary
 *.gif binary
 *.otf binary

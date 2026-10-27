@@ -66,7 +66,8 @@ int main(int argc, char** argv)
     QApplication::setApplicationDisplayName("Oh My Departure");
     QGuiApplication::setDesktopFileName("edwardkim.ohmydeparture");
     QApplication::setWindowIcon(QIcon(":/docs/icon.png"));
-    if (QFontDatabase::addApplicationFont(":/fonts/texgyreheroscn-bold.otf") < 0)
+    if (QFontDatabase::addApplicationFont(":/fonts/D-DINCondensed-Bold.otf") < 0
+        || QFontDatabase::addApplicationFont(":/fonts/texgyreheroscn-bold.otf") < 0)
         return fail("Could not load the bundled board font.");
 
     QCommandLineParser parser;

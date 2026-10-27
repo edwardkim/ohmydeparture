@@ -5,7 +5,14 @@ by rainygirl. The split-flap renderer, travel boards, timetable generation, orig
 icon, and bundled travel screenshots originate there. The original MIT copyright
 notice is retained in [LICENSE](LICENSE). See [UPSTREAM.md](UPSTREAM.md) for provenance.
 
-The unmodified **TeX Gyre Heros Cn Bold** font (`fonts/texgyreheroscn-bold.otf`) is
+The default Latin board face is the unmodified **D-DIN Condensed Bold** font
+(`fonts/D-DINCondensed-Bold.otf`), copyright 2017 Datto Inc., designed by
+Charles Nix (Monotype), under the **SIL Open Font License 1.1**. Its copyright
+notice and license are included in [fonts/D-DIN-OFL-1.1.txt](fonts/D-DIN-OFL-1.1.txt),
+with the upstream [FONTLOG](fonts/D-DIN-FONTLOG.txt). See
+[fonts/README.md](fonts/README.md) for the pinned source and checksums.
+
+The unmodified fallback **TeX Gyre Heros Cn Bold** font (`fonts/texgyreheroscn-bold.otf`) is
 provided under the **GUST Font License**. Its license is included in [fonts/GUST-FONT-LICENSE.txt](fonts/GUST-FONT-LICENSE.txt).
 
 Qt 6 is a system dependency, not redistributed by this bundle. Qt is available

@@ -3,6 +3,7 @@
 
 #include <QApplication>
 #include <QCryptographicHash>
+#include <QDir>
 #include <QFile>
 #include <QFontDatabase>
 #include <QJsonArray>
@@ -13,8 +14,10 @@
 #include <QtTest/QTest>
 
 #include <cstdio>
+#include <ctime>
 #include <stdexcept>
 
+extern int64 gTimeOffset;
 static void check(bool condition, const char* message)
 {
     if (!condition) throw std::runtime_error(message);
@@ -36,7 +39,8 @@ int main(int argc, char** argv)
     check(settingsDir.isValid(), "temporary settings directory");
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
-    check(QFontDatabase::addApplicationFont(":/fonts/texgyreheroscn-bold.otf") >= 0, "bundled font");
+    check(QFontDatabase::addApplicationFont(":/fonts/D-DINCondensed-Bold.otf") >= 0, "bundled DIN board font");
+    check(QFontDatabase::addApplicationFont(":/fonts/texgyreheroscn-bold.otf") >= 0, "bundled fallback font");
     BApplication bridge;
     be_app = &bridge;
 
@@ -85,6 +89,28 @@ int main(int argc, char** argv)
             check(board.AirportIndex() == i, "all airport and station selections");
         }
 
+        // Keep the generated timetable within one minute while replaying the
+        // same airline. A language refresh must animate an unchanged card;
+        // the one-second clock poll must leave the settled card alone.
+        const int64 savedOffset=gTimeOffset;
+        gTimeOffset=-(std::time(nullptr)%60);
+        board.SetFixedPhase(0);board.SetAirport(1);QTest::qWait(3600);
+        auto airlineTile=[&]{return board.Bitmap()->Image().copy(690,94,200,34);};
+        const auto airlineStable=airlineTile();
+        QDir().mkpath("test-output/airline-flip");
+        board.Bitmap()->Image().copy(0,0,1600,300).save("test-output/airline-flip/frame-000.png");
+        board.SetAirport(1);
+        bool airlineMoved=false;
+        for (int frame=1;frame<=35;++frame) {
+            QTest::qWait(30);
+            airlineMoved=airlineMoved || airlineTile()!=airlineStable;
+            board.Bitmap()->Image().copy(0,0,1600,300).save(QString("test-output/airline-flip/frame-%1.png").arg(frame,3,10,QChar('0')));
+        }
+        check(airlineMoved,"unchanged airline visibly flips on board refresh");
+        check(airlineTile()==airlineStable,"airline replay restores its original colour and label");
+        QTest::qWait(1200);
+        check(airlineTile()==airlineStable,"clock polling does not repeatedly animate the airline");
+        board.SetFixedPhase(-1);gTimeOffset=savedOffset;
         board.SetAirport(0);
         bool menuOpened = false, selectionCorrect = false, selectionExclusive = false, quitIsCommand = false;
         QTimer::singleShot(20, [&] {

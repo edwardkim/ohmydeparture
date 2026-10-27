@@ -21,6 +21,8 @@
 #include <QFontMetricsF>
 #include <QTimeZone>
 #include <QMouseEvent>
+#include <QPolygonF>
+#include <QTransform>
 #endif
 
 #ifndef RDEPARTURES_QT
@@ -562,10 +564,11 @@ set_face(BFont& font, const char* family, const char* style)
 void
 BoardView::_PickFonts()
 {
-	// A condensed grotesque, like the flaps at Narita. R Departures installs
-	// TeX Gyre Heros Condensed; Fliqlo for RenkuOS does too.
+	// DIN's narrow, straight-sided lettering suits mechanical departure
+	// boards. Keep the original Heros face as a fallback for older installs.
 	fMain = *be_bold_font;
-	if (!set_face(fMain, "TeX Gyre Heros Cn", "Bold")
+	if (!set_face(fMain, "D-DIN Condensed", "DINCondensed-Bold")
+		&& !set_face(fMain, "TeX Gyre Heros Cn", "Bold")
 		&& !set_face(fMain, "Oswald", "Bold"))
 		set_face(fMain, "Noto Sans Display", "Bold");
 
@@ -620,12 +623,24 @@ glyph_box(const BFont& font, const char* text)
 // The font a piece of text is drawn in: the CJK face for Hangul, kana and
 // Han, the board face where it has the glyphs, Noto Sans otherwise (Greek,
 // Cyrillic, Vietnamese).
-static const BFont&
+static BFont
 font_for(const char* text, const BFont& main, const BFont& fallback,
 	const BFont& cjk)
 {
-	if (has_wide(text))
-		return cjk;
+	if (has_wide(text)) {
+		BFont font(cjk);
+#ifdef RDEPARTURES_QT
+        // Keep Hangul's height and weight, with a narrower face to match DIN.
+        // Apply this before measuring so labels and project badges fit too.
+        for (QChar c : QString::fromUtf8(text)) {
+            if (c.script() == QChar::Script_Hangul) {
+                font.SetStretch(85);
+                break;
+            }
+        }
+#endif
+		return font;
+	}
 	int32 chars = 0;
 	for (const char* s = text; *s != '\0'; s += utf8_length((uint8)*s))
 		chars++;
@@ -1080,18 +1095,23 @@ void BoardView::_SetProject(int index, const QString& project, const QString& pa
     _Enqueue(fCells[field.first], _ProjectFace(project,path), NULL, 0, system_time() + delay);
 }
 
-void BoardView::_SetFlightAirline(int index, const QString& code, const QString& name, bigtime_t delay)
+void BoardView::_SetFlightAirline(int index, const QString& code, const QString& name, bigtime_t delay, bool replay)
 {
     for (int airline = 0; airline < airline_count(); ++airline) {
         if (!code.isEmpty() && code == QString::fromLatin1(airline_at(airline)->code)) {
-            _SetAirline(index, airline, delay); return;
+            _SetAirline(index, airline, delay, replay); return;
         }
     }
     const QString identity = code.isEmpty() ? name : code;
     const QString label = code.isEmpty() ? name : code;
     Field& field = fFields[index];
     BString text; text << "ICN-AIRLINE|" << identity.toUtf8().constData();
-    if (field.text == text) return;
+    if (field.text == text) {
+        Cell& cell = fCells[field.first];
+        if (replay && !identity.isEmpty() && !cell.flipping && cell.queued == 0)
+            _Enqueue(cell, cell.current, NULL, 0, system_time() + delay);
+        return;
+    }
     field.text = text;
     BString key; key << "AIRLINE|" << identity.toUtf8().constData();
     const uint32 hash = hash_key(key);
@@ -1142,7 +1162,7 @@ void BoardView::_UpdateIcn(bool phaseChanged)
         if (destinationCells > fFields[first + COL_DEST].count && destination.contains('/'))
             destination = destination.section('/', 0, 0).trimmed();
         _SetField(first + COL_DEST, destination.toUtf8().constData(), COLOR_WHITE, delay);
-        _SetFlightAirline(first + COL_AIRLINE, flight.airlineCode, flight.airlineName, delay);
+        _SetFlightAirline(first + COL_AIRLINE, flight.airlineCode, flight.airlineName, delay, phaseChanged);
         _SetField(first + COL_FLIGHT, flight.flightId.toUtf8().constData(), COLOR_WHITE, delay);
         _SetField(first + COL_GATE, flight.gate.toUtf8().constData(), COLOR_WHITE, delay);
         const int color = flight.tone == IcnDeparture::Muted ? COLOR_GRAY
@@ -1266,16 +1286,24 @@ BoardView::_SetField(int index, const char* text, int color, bigtime_t delay)
 
 
 void
-BoardView::_SetAirline(int index, int airline, bigtime_t delay)
+BoardView::_SetAirline(int index, int airline, bigtime_t delay, bool replay)
 {
 	Field& field = fFields[index];
 	BString text;
 	text << airline;
-	if (field.text == text)
+	if (field.text == text) {
+		Cell& cell = fCells[field.first];
+		if (replay && airline >= 0 && !cell.flipping && cell.queued == 0)
+			_Enqueue(cell, cell.current, NULL, 0, system_time() + delay);
 		return;
+	}
 	field.text = text;
 	Cell& cell = fCells[field.first];
 	BBitmap* target = _AirlineFace(airline);
+#ifdef RDEPARTURES_QT
+    // A wide colour card turns once directly to its next airline.
+    _Enqueue(cell, target, NULL, 0, system_time() + delay);
+#else
 	BBitmap* rattle[4];
 	fRandom = fRandom * 1103515245 + 12345;
 	int n = airline < 0 ? 1 : 2 + (fRandom >> 16) % 3;
@@ -1286,6 +1314,7 @@ BoardView::_SetAirline(int index, int airline, bigtime_t delay)
 	fRandom = fRandom * 1103515245 + 12345;
 	_Enqueue(cell, target, rattle, n,
 		system_time() + delay + (fRandom >> 16) % 120000);
+#endif
 }
 
 
@@ -1304,6 +1333,54 @@ copy_row(uint8* dst, const uint8* src, int pixels, int dark)
 	}
 }
 
+
+#ifdef RDEPARTURES_QT
+// Wide, solid-colour cards need a visible moving outline: folding the text
+// alone against an identical background looks like a stationary centre line.
+static void
+draw_colored_flip(QImage& surface, QPoint origin, const QImage& from,
+    const QImage& to, float progress)
+{
+    const qreal w = from.width(), h = from.height(), half = int(h) / 2;
+    const bool closing = progress < .5f;
+    const qreal angle = (closing ? progress * 2 : (progress - .5f) * 2) * M_PI / 2;
+    const qreal extent = closing ? cos(angle) : sin(angle);
+    const qreal fold = sqrt(qMax<qreal>(0, 1 - extent * extent));
+    const qreal inset = qMin<qreal>(12, w * .045) * fold;
+    const QRectF top(0, 0, w, half), bottom(0, half, w, h - half);
+    QPainter painter(&surface);
+    painter.translate(origin);
+    painter.setClipRect(QRectF(0, 0, w, h));
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    painter.drawImage(top, to, top);
+    painter.drawImage(bottom, from, bottom);
+    // The recessed face stays in shadow behind the rotating panel. This
+    // preserves visible depth even when both faces have the same colour.
+    painter.fillRect(closing ? top.adjusted(1, 0, -1, 0) : bottom.adjusted(1, 0, -1, 0),
+        QColor(0, 0, 0, 155));
+    const qreal edge = closing ? half - half * extent : half + (h - half) * extent;
+    const QRectF source = closing ? top : bottom;
+    const QPolygonF original{source.topLeft(), source.topRight(), source.bottomRight(), source.bottomLeft()};
+    const QPolygonF panel = closing
+        ? QPolygonF{{inset, edge}, {w - inset, edge}, {w, half}, {0, half}}
+        : QPolygonF{{0, half}, {w, half}, {w - inset, edge}, {inset, edge}};
+    QTransform transform;
+    if (source.height() * extent > .35 && QTransform::quadToQuad(original, panel, transform)) {
+        painter.save();
+        painter.setTransform(transform, true);
+        painter.drawImage(source, closing ? from : to, source);
+        painter.restore();
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(0, 0, 0, int(125 * (1 - extent))));
+        painter.drawPolygon(panel);
+        painter.setPen(QPen(QColor(255, 255, 255, int(110 * fold)), 1));
+        painter.drawLine(QPointF(inset + 1, edge), QPointF(w - inset - 1, edge));
+    }
+    painter.setPen(QPen(QColor(0, 0, 0), 1));
+    painter.drawLine(QPointF(1, half), QPointF(w - 2, half));
+}
+#endif
 
 // Draws a cell into the board: its current face, or the flip from it to the
 // next one. The top half of the old face folds down onto the hinge, then
@@ -1342,7 +1419,7 @@ BoardView::_Compose(Cell& cell, bigtime_t now)
 		t = 1;
     bool deliberate = false;
 #ifdef RDEPARTURES_QT
-    deliberate = fCodexMode;
+    deliberate = fCodexMode || cell.sizeClass == SIZE_AIRLINE;
 #endif
     const float progress = t;
     if (deliberate) {
@@ -1351,6 +1428,14 @@ BoardView::_Compose(Cell& cell, bigtime_t now)
         else if (t < .56f) t = .5f;
         else t = .5f + (t - .56f) / .88f;
     }
+#ifdef RDEPARTURES_QT
+    if (cell.sizeClass == SIZE_AIRLINE) {
+        // Borrow the board's buffer without detaching or changing cached faces.
+        QImage surface(base, boardWidth, boardHeight, bpr, QImage::Format_RGB32);
+        draw_colored_flip(surface, QPoint(x, y0), a->Image(), b->Image(), t);
+        return;
+    }
+#endif
 	int half = h / 2;
 	for (int y = 0; y < h; y++) {
 		const uint8* src;
@@ -1417,7 +1502,8 @@ BoardView::_Compose(Cell& cell, bigtime_t now)
 bigtime_t BoardView::_StepLength(const Cell& cell) const
 {
 #ifdef RDEPARTURES_QT
-    if (fCodexMode) return bigtime_t(fCodexFlipDurationMs) * (cell.queued == 1 ? 1000 : 550);
+    if (fCodexMode || cell.sizeClass == SIZE_AIRLINE)
+        return bigtime_t(fCodexFlipDurationMs) * (cell.queued == 1 ? 1000 : 550);
 #endif
     return cell.sizeClass == SIZE_AIRLINE ? kAirlineStep : cell.queued == 1 ? kFinalStep : kRattleStep;
 }
@@ -1575,7 +1661,7 @@ BoardView::_UpdateContent(bool phaseChanged)
 			_SetField(f0 + COL_NEW, "", COLOR_WHITE, delay);
 		_SetField(f0 + COL_DEST, city_name(city, lang), COLOR_WHITE, delay);
 		_SetAirline(f0 + COL_AIRLINE,
-			(int)(find_airline(route.airline) - airline_at(0)), delay);
+			(int)(find_airline(route.airline) - airline_at(0)), delay, phaseChanged);
 		format_flight_number(buffer, sizeof(buffer), airport, flight);
 		_SetField(f0 + COL_FLIGHT, buffer, COLOR_WHITE, delay);
 		_SetField(f0 + COL_GATE, status == STATUS_CANCELLED ? "" : flight.gate,

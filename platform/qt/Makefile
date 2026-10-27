@@ -31,7 +31,7 @@ $(BUILD)/%.o: %.cpp | check-deps
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-$(BUILD)/qrc_assets.cpp: platform/qt/assets.qrc fonts/texgyreheroscn-bold.otf docs/icon.png data/airport-codes.json data/airport-details.json data/icn-departures.json | check-deps
+$(BUILD)/qrc_assets.cpp: platform/qt/assets.qrc fonts/D-DINCondensed-Bold.otf fonts/texgyreheroscn-bold.otf docs/icon.png data/airport-codes.json data/airport-details.json data/icn-departures.json | check-deps
 	@mkdir -p $(dir $@)
 	$(RCC) $< -o $@
 
@@ -44,6 +44,8 @@ install: $(APP)
 	install -Dm644 LICENSE "$(DESTDIR)$(PREFIX)/share/licenses/ohmydeparture/LICENSE"
 	install -Dm644 THIRD_PARTY_NOTICES.md "$(DESTDIR)$(PREFIX)/share/licenses/ohmydeparture/THIRD_PARTY_NOTICES.md"
 	install -Dm644 fonts/GUST-FONT-LICENSE.txt "$(DESTDIR)$(PREFIX)/share/licenses/ohmydeparture/GUST-FONT-LICENSE.txt"
+	install -Dm644 fonts/D-DIN-OFL-1.1.txt "$(DESTDIR)$(PREFIX)/share/licenses/ohmydeparture/D-DIN-OFL-1.1.txt"
+	install -Dm644 fonts/D-DIN-FONTLOG.txt "$(DESTDIR)$(PREFIX)/share/licenses/ohmydeparture/D-DIN-FONTLOG.txt"
 	install -Dm644 platform/codex/reader.py "$(DESTDIR)$(PREFIX)/share/ohmydeparture/codex-reader.py"
 	@mkdir -p "$(DESTDIR)$(PREFIX)/share/applications"
 	sed 's|@EXEC@|$(PREFIX)/bin/ohmydeparture|g' platform/qt/ohmydeparture.desktop.in > "$(DESTDIR)$(PREFIX)/share/applications/edwardkim.ohmydeparture.desktop"

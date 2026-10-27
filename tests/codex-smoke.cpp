@@ -26,6 +26,20 @@
 #include <stdexcept>
 
 static void check(bool condition,const char* message) {if (!condition) throw std::runtime_error(message);}
+static bool movingOutline(const QImage& stable, const QImage& frame) {
+    auto difference=[](QColor a,QColor b) {
+        return qMax(qAbs(a.red()-b.red()),qMax(qAbs(a.green()-b.green()),qAbs(a.blue()-b.blue())));
+    };
+    // A projected edge exposes the recessed face beside the moving panel.
+    // Merely darkening a horizontal hinge or the whole row cannot pass this.
+    for (int y=3;y<frame.height()-3;++y) {
+        if (qAbs(y-frame.height()/2)<=3) continue;
+        if (stable.pixelColor(4,y)!=stable.pixelColor(20,y)) continue;
+        if (difference(frame.pixelColor(4,y),frame.pixelColor(20,y))>25
+            && difference(frame.pixelColor(4,y),stable.pixelColor(4,y))>25) return true;
+    }
+    return false;
+}
 static bool await(const std::function<bool()>& condition) {
     for (int i=0;i<100;++i) {if (condition()) return true;QTest::qWait(30);}return condition();
 }
@@ -35,7 +49,8 @@ int main(int argc,char** argv) {
     QTemporaryDir preferences;
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,preferences.path());
-    QFontDatabase::addApplicationFont(":/fonts/texgyreheroscn-bold.otf");
+    check(QFontDatabase::addApplicationFont(":/fonts/D-DINCondensed-Bold.otf") >= 0,"bundled DIN board font");
+    check(QFontDatabase::addApplicationFont(":/fonts/texgyreheroscn-bold.otf") >= 0,"bundled fallback font");
     try {
         QSettings legacy("rainygirl","RDepartures");
         legacy.setValue("airport","SEOUL");legacy.setValue("codex/flipIntervalSeconds",7);
@@ -164,12 +179,15 @@ int main(int argc,char** argv) {
         interval->setValue(2);check(QSettings().value("codex/flipIntervalSeconds").toInt()==2,"interval setting persists");
         bool moved=false;for(int i=0;i<80;++i) {QTest::qWait(35);if(tile()!=stable){moved=true;break;}}
         check(moved,"unchanged project badge visibly flips at configured interval");
+        bool outlined=false;
         for(int frame=1;frame<=32;++frame) {
             QTest::qWait(50);
+            outlined=outlined || movingOutline(stable,tile());
             if(frame==7) check(tile()!=stable,"flip remains visibly folded after 350 milliseconds");
             if(frame==18) {check(tile()==stable,"slower flip restores original project colour and text");interval->setValue(0);}
             board.flapBoard()->Bitmap()->Image().copy(0,0,1600,300).save(QString("test-output/codex-flip/frame-%1.png").arg(frame,3,10,QChar('0')));
         }
+        check(outlined,"wide colour badge has a moving projected outline away from its hinge");
         interval->setValue(3);
 
         QTest::keyClick(board.flapBoard(),Qt::Key_F11);check(board.isFullScreen(),"F11 on flap view");

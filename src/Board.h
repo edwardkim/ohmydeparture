@@ -127,7 +127,7 @@ private:
     void _UpdateCodex();
     void _UpdateCodexHistory();
     void _UpdateIcn(bool phaseChanged);
-    void _SetFlightAirline(int field, const QString& code, const QString& name, bigtime_t delay);
+    void _SetFlightAirline(int field, const QString& code, const QString& name, bigtime_t delay, bool replay = false);
     void _FlipCodexRows(bigtime_t now);
     BBitmap* _ProjectFace(const QString& project, const QString& path);
     void _SetProject(int field, const QString& project, const QString& path, bigtime_t delay);
@@ -156,7 +156,7 @@ private:
 			void			_SetField(int field, const char* text, int color,
 								bigtime_t delay);
 			void			_SetAirline(int field, int airline,
-								bigtime_t delay);
+								bigtime_t delay, bool replay = false);
 			void			_Enqueue(Cell& cell, BBitmap* target,
 								BBitmap** rattle, int rattleCount,
 								bigtime_t startAt);

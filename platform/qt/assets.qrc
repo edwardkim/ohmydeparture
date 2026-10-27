@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="/">
+    <file alias="fonts/D-DINCondensed-Bold.otf">../../fonts/D-DINCondensed-Bold.otf</file>
     <file alias="fonts/texgyreheroscn-bold.otf">../../fonts/texgyreheroscn-bold.otf</file>
     <file alias="docs/icon.png">../../docs/icon.png</file>
     <file alias="data/airport-codes.json">../../data/airport-codes.json</file>

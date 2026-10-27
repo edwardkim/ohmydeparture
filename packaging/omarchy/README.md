@@ -92,6 +92,6 @@ run the new installer to update the embedded data. Restart an already running ap
 after updating. The bundle excludes `.env` and all service keys.
 
 Source and documentation: <https://github.com/edwardkim/ohmydeparture>.
-MIT source; original R Departures attribution and GUST font license are included
+MIT source; original R Departures attribution, SIL OFL 1.1 and GUST font licenses are included
 in the plugin directory. This is an extracted binary bundle, not an Omarchy plugin
 registry URL; use this installer rather than `omarchy plugin add` on the source repo.

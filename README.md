@@ -44,9 +44,14 @@ make -j"$(nproc)"
 ```
 
 Codex is the default view. An existing Codex installation supplies data; an empty
-history simply produces an empty board. The font and icon are embedded in the
+history simply produces an empty board. The Latin fonts and icon are embedded in the
 binary. Keep `platform/codex/reader.py` beside a source build, or use the installer
 so the helper is installed at the expected location.
+
+Board lettering uses D-DIN Condensed Bold for a traditional mechanical departure
+board appearance. Korean uses its system CJK face (preferably Noto Sans CJK KR)
+at 85% width, preserving its height and two-cell layout. Japanese and Chinese
+keep their original width.
 
 ```sh
 ./ohmydeparture --airport ICN --windowed
@@ -95,6 +100,10 @@ not directly installable with `omarchy plugin add`; use the extracted bundle.
 | Fullscreen / window | **F11** |
 | Close browser/settings or the main session board | **Esc** |
 | Change travel board / Codex page | **← / →** (travel also supports Space) |
+
+Airline and project colour cards fold as a whole, with a moving panel outline
+and a shaded recessed face. Airport cards turn on language refresh even when
+the airline stays the same; project cards follow the Codex replay interval.
 
 The repeat interval accepts **0–3600 seconds** (0 disables replay), and flip
 duration accepts **0.20–2.00 seconds**. Both settings save automatically. A sweep
@@ -256,7 +265,8 @@ pushed. CI configuration is included; a local test run is not a GitHub CI result
 ## Credits and license
 
 MIT source. Original R Departures copyright and attribution are retained.
-The bundled, unmodified TeX Gyre font uses the GUST Font License.
+The bundled, unmodified D-DIN font uses SIL OFL 1.1; the TeX Gyre fallback uses
+the GUST Font License.
 See [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and
 [UPSTREAM.md](UPSTREAM.md). The inherited Haiku source/build path is preserved
 for provenance; this release's supported packaging and tests target Linux.
